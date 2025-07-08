@@ -86,12 +86,13 @@ type ChunkColorProfileData struct {
 	_     [8]byte
 }
 
-func checkMagicNumber(magic, number uint16, from ...string) {
-	fmt.Println(from, "magic number: ", magic, number)
+func checkMagicNumber(magic, number uint16, from ...string) error {
 	if number != magic {
-		log.Fatalf(strings.Join(from, ""), "magic number fail")
+		return fmt.Errorf("%s: magic number fail (got 0x%X, want 0x%X)",
+			strings.Join(from, ""), number, magic)
 	}
-	fmt.Println(from, "magic number pass")
+
+	return nil
 }
 
 func (l *Loader) readToBuffer() error {
@@ -115,37 +116,58 @@ func (l *Loader) enoughSpaceToRead(size int) bool {
 	return available >= needed
 }
 
-func BytesToStruct[T any](loader *Loader, size int) T {
+func BytesToStruct[T any](loader *Loader, size int) (T, error) {
 	var t T
 	if loader.enoughSpaceToRead(size) {
 		err := binary.Read(loader.Buffer, binary.LittleEndian, &t)
 		if err != nil {
-			fmt.Println("binary.Read: ", err)
+			return t, err
 		}
-		return t
+		return t, nil
 	}
 
 	fmt.Println("pegar mais dados do fd")
-	loader.readToBuffer()
+	err := loader.readToBuffer()
+	if err != nil {
+		return t, err
+	}
+
 	return BytesToStruct[T](loader, size)
 }
 
-func (l *Loader) loadFrameChunkData(ch ChunkHeader) []byte {
+func (l *Loader) loadFrameChunkData(ch ChunkHeader) ([]byte, error) {
 	size := ch.Size - ChunkHeaderSize
 	if l.enoughSpaceToRead(int(size)) {
 		bufchunk := make([]byte, size)
-		io.ReadFull(l.Buffer, bufchunk)
-		return bufchunk
+		_, err := io.ReadFull(l.Buffer, bufchunk)
+		if err != nil {
+			return nil, err
+		}
+		return bufchunk, nil
 	}
 
 	fmt.Println("chunk: pegar mais dados do fd")
-	l.readToBuffer()
+	err := l.readToBuffer()
+	if err != nil {
+		return nil, err
+	}
+
 	return l.loadFrameChunkData(ch)
 }
 
 func (l *Loader) ParseHeader() (Header, error) {
 	fmt.Printf("Parser Header")
-	return BytesToStruct[Header](l, ChunkHeaderSize), nil
+	header, err := BytesToStruct[Header](l, ChunkHeaderSize)
+	if err != nil {
+		return header, err
+	}
+
+	err = checkMagicNumber(0xA5E0, header.MagicNumber, "header")
+	if err != nil {
+		return header, err
+	}
+
+	return header, nil
 }
 
 func (l *Loader) ParseFrames(header *Header) ([]Frame, error) {
@@ -154,18 +176,31 @@ func (l *Loader) ParseFrames(header *Header) ([]Frame, error) {
 	fmt.Printf("Parser Frames, count: %d", header.Frames)
 	for i := range header.Frames {
 		fmt.Println("frameheader to struct")
-		fh := BytesToStruct[FrameHeader](l, FrameHeaderSize)
-		checkMagicNumber(0xF1FA, fh.MagicNumber, "frameheader", fmt.Sprint(i))
+		fh, err := BytesToStruct[FrameHeader](l, FrameHeaderSize)
+		if err != nil {
+			return nil, err
+		}
+		err = checkMagicNumber(0xF1FA, fh.MagicNumber, "frameheader", fmt.Sprint(i))
+		if err != nil {
+			return nil, err
+		}
+
 		fmt.Println("Chunk number: ", fh.ChunkNumber)
 
 		chunkList := make([]Chunk, 0)
 		// TODO: verificar o numero antigo
 		for range fh.ChunkNumber {
 			fmt.Println("chunkheader to struct")
-			ch := BytesToStruct[ChunkHeader](l, ChunkHeaderSize)
+			ch, err := BytesToStruct[ChunkHeader](l, ChunkHeaderSize)
+			if err != nil {
+				return nil, err
+			}
 
 			fmt.Println("chunkdata to struct")
-			bufchunk := l.loadFrameChunkData(ch)
+			bufchunk, err := l.loadFrameChunkData(ch)
+			if err != nil {
+				return nil, err
+			}
 
 			c := Chunk{
 				Header: ch,
@@ -196,9 +231,15 @@ func DeserializeFile(fd *os.File) (*AsepriteFile, error) {
 	loader.Reader = reader
 	loader.File = ase
 
-	header, _ := loader.ParseHeader()
+	header, err := loader.ParseHeader()
+	if err != nil {
+		return nil, err
+	}
 	loader.Buffer.Reset()
-	frames, _ := loader.ParseFrames(&header)
+	frames, err := loader.ParseFrames(&header)
+	if err != nil {
+		return nil, err
+	}
 
 	ase.Header = header
 	ase.Frames = frames
@@ -210,12 +251,12 @@ func main() {
 	path := os.Args[1]
 	fd, err := os.Open(path)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("error opening file: %v", err)
 	}
 	defer fd.Close()
 
 	_, err = DeserializeFile(fd)
 	if err != nil {
-		log.Fatalf("%s", err.Error())
+		log.Fatalf("error deserializing file: %v", err)
 	}
 }
