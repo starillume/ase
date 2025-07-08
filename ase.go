@@ -10,9 +10,6 @@ import (
 	"strings"
 )
 
-var Reader io.Reader
-var ChunkPart = make([]byte, ChunkSize)
-
 const (
 	ChunkSize = 128
 )
@@ -22,7 +19,15 @@ type AsepriteFile struct {
 	Frames []Frame
 }
 
+type Loader struct {
+	Reader io.Reader
+	Buf    []byte
+	Buffer *bytes.Buffer
+	File   *AsepriteFile
+}
+
 const HeaderSize = 128
+
 type Header struct {
 	FileSize     uint32
 	MagicNumber  uint16
@@ -47,10 +52,11 @@ type Header struct {
 
 type Frame struct {
 	Header FrameHeader
-	// Chunks []Chunk n precisa por enquanto
+	Chunks []Chunk
 }
 
 const FrameHeaderSize = 16
+
 type FrameHeader struct {
 	FrameBytes     uint32
 	MagicNumber    uint16
@@ -61,6 +67,7 @@ type FrameHeader struct {
 }
 
 const ChunkHeaderSize = 6
+
 type ChunkHeader struct {
 	Size uint32
 	Type uint16
@@ -87,13 +94,13 @@ func checkMagicNumber(magic, number uint16, from ...string) {
 	fmt.Println(from, "magic number pass")
 }
 
-func readToBuffer(reader io.Reader, buffer *bytes.Buffer, chunk []byte) error {
-	_, err := reader.Read(chunk)
+func (l *Loader) readToBuffer() error {
+	_, err := l.Reader.Read(l.Buf)
 	if err != nil {
 		return err
 	}
 
-	_, err = buffer.Write(chunk)
+	_, err = l.Buffer.Write(l.Buf)
 	if err != nil {
 		return err
 	}
@@ -101,17 +108,17 @@ func readToBuffer(reader io.Reader, buffer *bytes.Buffer, chunk []byte) error {
 	return nil
 }
 
-func enoughSpaceToRead(size int, buffer *bytes.Buffer) bool {
-	available := buffer.Len()
+func (l *Loader) enoughSpaceToRead(size int) bool {
+	available := l.Buffer.Len()
 	needed := size
 	fmt.Println("available: ", available, "needed: ", needed)
 	return available >= needed
 }
 
-func BytesToStruct[T any](size int, buffer *bytes.Buffer) T {
+func BytesToStruct[T any](loader *Loader, size int) T {
 	var t T
-	if enoughSpaceToRead(size, buffer) {
-		err := binary.Read(buffer, binary.LittleEndian, &t)
+	if loader.enoughSpaceToRead(size) {
+		err := binary.Read(loader.Buffer, binary.LittleEndian, &t)
 		if err != nil {
 			fmt.Println("binary.Read: ", err)
 		}
@@ -119,21 +126,84 @@ func BytesToStruct[T any](size int, buffer *bytes.Buffer) T {
 	}
 
 	fmt.Println("pegar mais dados do fd")
-	readToBuffer(Reader, buffer, ChunkPart)
-	return BytesToStruct[T](size, buffer)
+	loader.readToBuffer()
+	return BytesToStruct[T](loader, size)
 }
 
-func loadFrameChunkData(ch ChunkHeader, buffer *bytes.Buffer) []byte {
+func (l *Loader) loadFrameChunkData(ch ChunkHeader) []byte {
 	size := ch.Size - ChunkHeaderSize
-	if enoughSpaceToRead(int(size), buffer) {
+	if l.enoughSpaceToRead(int(size)) {
 		bufchunk := make([]byte, size)
-		io.ReadFull(buffer, bufchunk)
+		io.ReadFull(l.Buffer, bufchunk)
 		return bufchunk
 	}
 
 	fmt.Println("chunk: pegar mais dados do fd")
-	readToBuffer(Reader, buffer, ChunkPart)
-	return loadFrameChunkData(ch, buffer)
+	l.readToBuffer()
+	return l.loadFrameChunkData(ch)
+}
+
+func (l *Loader) ParseHeader() (Header, error) {
+	fmt.Printf("Parser Header")
+	return BytesToStruct[Header](l, ChunkHeaderSize), nil
+}
+
+func (l *Loader) ParseFrames(header *Header) ([]Frame, error) {
+	frames := make([]Frame, 0)
+
+	fmt.Printf("Parser Frames, count: %d", header.Frames)
+	for i := range header.Frames {
+		fmt.Println("frameheader to struct")
+		fh := BytesToStruct[FrameHeader](l, FrameHeaderSize)
+		checkMagicNumber(0xF1FA, fh.MagicNumber, "frameheader", fmt.Sprint(i))
+		fmt.Println("Chunk number: ", fh.ChunkNumber)
+
+		chunkList := make([]Chunk, 0)
+		// TODO: verificar o numero antigo
+		for range fh.ChunkNumber {
+			fmt.Println("chunkheader to struct")
+			ch := BytesToStruct[ChunkHeader](l, ChunkHeaderSize)
+
+			fmt.Println("chunkdata to struct")
+			bufchunk := l.loadFrameChunkData(ch)
+
+			c := Chunk{
+				Header: ch,
+				Data:   bufchunk,
+			}
+
+			fmt.Println("Chunk data: ", c.Data)
+
+			chunkList = append(chunkList, c)
+		}
+
+		frames = append(frames, Frame{Header: fh, Chunks: chunkList})
+		// NOTE: depois de ler dar um reset no buffer? Vê se tem um resto guardar e depois
+		// coloca no buffer de novo
+	}
+
+	return frames, nil
+}
+
+func DeserializeFile(fd *os.File) (*AsepriteFile, error) {
+	var ase *AsepriteFile = new(AsepriteFile)
+	loader := new(Loader)
+
+	reader := fd
+
+	loader.Buf = make([]byte, ChunkSize)
+	loader.Buffer = new(bytes.Buffer)
+	loader.Reader = reader
+	loader.File = ase
+
+	header, _ := loader.ParseHeader()
+	loader.Buffer.Reset()
+	frames, _ := loader.ParseFrames(&header)
+
+	ase.Header = header
+	ase.Frames = frames
+
+	return ase, nil
 }
 
 func main() {
@@ -144,48 +214,8 @@ func main() {
 	}
 	defer fd.Close()
 
-	buffer := new(bytes.Buffer)
-	fmt.Println("buffer available on create: ", buffer.Len())
-	Reader = fd
-	readToBuffer(Reader, buffer, ChunkPart)
-	fmt.Println("buffer available after a read fd: ", buffer.Len())
-
-	var h Header
-	fmt.Println("header to struct")
-	binary.Read(buffer, binary.LittleEndian, &h)
-	fmt.Println("buffer available after a read to struct: ", buffer.Len())
-
-	checkMagicNumber(0xA5E0, h.MagicNumber, "header")
-
-	buffer.Reset()
-
-	for i := range h.Frames {
-		readToBuffer(Reader, buffer, ChunkPart)
-
-		var fh FrameHeader
-		fmt.Println("framaeheader to struct")
-		fh = BytesToStruct[FrameHeader](FrameHeaderSize, buffer)
-		checkMagicNumber(0xF1FA, fh.MagicNumber, "frameheader", fmt.Sprint(i))
-
-		fmt.Println("Chunk number: ", fh.ChunkNumber)
-
-		for range fh.ChunkNumber {
-			var ch ChunkHeader
-			fmt.Println("chunkheader to struct")
-			ch = BytesToStruct[ChunkHeader](ChunkHeaderSize, buffer)
-
-			fmt.Println("Chunk type: ", ch.Type)
-			fmt.Println("Chunk size: ", ch.Size)
-
-			fmt.Println("chunkdata to struct")
-			bufchunk := loadFrameChunkData(ch, buffer)
-
-			c := &Chunk{
-				Header: ch,
-				Data:   bufchunk,
-			}
-
-			fmt.Println("Chunk data: ", c.Data)
-		}
+	_, err = DeserializeFile(fd)
+	if err != nil {
+		log.Fatalf("%s", err.Error())
 	}
 }
