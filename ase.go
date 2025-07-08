@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"strings"
 )
 
 const (
@@ -86,10 +85,9 @@ type ChunkColorProfileData struct {
 	_     [8]byte
 }
 
-func checkMagicNumber(magic, number uint16, from ...string) error {
+func checkMagicNumber(magic, number uint16, from string) error {
 	if number != magic {
-		return fmt.Errorf("%s: magic number fail (got 0x%X, want 0x%X)",
-			strings.Join(from, ""), number, magic)
+		return fmt.Errorf("%s: magic number fail (got 0x%X, want 0x%X)", from, number, magic)
 	}
 
 	return nil
@@ -180,7 +178,7 @@ func (l *Loader) ParseFrames(header *Header) ([]Frame, error) {
 		if err != nil {
 			return nil, err
 		}
-		err = checkMagicNumber(0xF1FA, fh.MagicNumber, "frameheader", fmt.Sprint(i))
+		err = checkMagicNumber(0xF1FA, fh.MagicNumber, "frameheader " + fmt.Sprint(i))
 		if err != nil {
 			return nil, err
 		}
