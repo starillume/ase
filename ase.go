@@ -148,6 +148,8 @@ type ChunkOldPalette struct {
 	Colors []ChunkOldPaletteColor
 }
 
+type ChunkOldPalette2 struct { *ChunkOldPalette } // NOTE: same thing (memory-wise), but each color has values between 0-63
+
 type ChunkOldPaletteData struct {
 	PacketsNumber uint16
 	Packets       []ChunkOldPalettePacket
@@ -159,6 +161,7 @@ type ChunkOldPalettePacket struct {
 }
 
 type ChunkOldPaletteColor struct {
+	// values between 0-255
 	R byte
 	G byte
 	B byte
@@ -329,11 +332,23 @@ func (l *Loader) ParseChunkOldPalette(ch ChunkHeader) (Chunk, error) {
 		}
 	}
 
-	return &ChunkOldPalette{
-		header: ch,
-		Colors: colors,
-	}, nil
-
+	switch ch.Type {
+		case OldPaletteChunkHex:
+			return &ChunkOldPalette{
+				header: ch,
+				Colors: colors,
+			}, nil
+		case OldPaletteChunk2Hex:
+			return &ChunkOldPalette2 {
+				ChunkOldPalette: &ChunkOldPalette{
+					header: ch,
+					Colors: colors,
+				},
+			}, nil
+		default:
+			// should be unreachable
+			return nil, fmt.Errorf("Invalid chunk type for parsing OldPaletteChunk: 0x%X", ch.Type)
+	}
 }
 
 func (l *Loader) ParseChunkColorProfile(ch ChunkHeader) (Chunk, error) {
