@@ -68,20 +68,20 @@ type FrameHeader struct {
 type ChunkDataType uint16
 
 const (
-	OldPaletteChunk      ChunkDataType = 0x0004
-	OldPaletteChunk2     ChunkDataType = 0x0011
-	LayerChunk           ChunkDataType = 0x2004
-	CelChunk             ChunkDataType = 0x2005
-	CelExtraChunk        ChunkDataType = 0x2006
-	ColorProfileChunkHex ChunkDataType = 0x2007
-	ExternalFilesChunk   ChunkDataType = 0x2008
-	MaskChunk            ChunkDataType = 0x2016 // DEPRECATED
-	PathChunk            ChunkDataType = 0x2017 // NEVER USED
-	TagsChunk            ChunkDataType = 0x2018
-	PaletteChunk         ChunkDataType = 0x2019
-	UserDataChunk        ChunkDataType = 0x2020
-	SliceChunk           ChunkDataType = 0x2022
-	TilesetChunk         ChunkDataType = 0x2023
+	OldPaletteChunkHex    ChunkDataType = 0x0004
+	OldPaletteChunk2Hex   ChunkDataType = 0x0011
+	LayerChunkHex         ChunkDataType = 0x2004
+	CelChunkHex           ChunkDataType = 0x2005
+	CelExtraChunkHex      ChunkDataType = 0x2006
+	ColorProfileChunkHex  ChunkDataType = 0x2007
+	ExternalFilesChunkHex ChunkDataType = 0x2008
+	MaskChunkHex          ChunkDataType = 0x2016 // DEPRECATED
+	PathChunkHex          ChunkDataType = 0x2017 // NEVER USED
+	TagsChunkHex          ChunkDataType = 0x2018
+	PaletteChunkHex       ChunkDataType = 0x2019
+	UserDataChunkHex      ChunkDataType = 0x2020
+	SliceChunkHex         ChunkDataType = 0x2022
+	TilesetChunkHex       ChunkDataType = 0x2023
 )
 
 const ChunkHeaderSize = 6
@@ -141,6 +141,35 @@ type ChunkColorProfileData struct {
 type ChunkColorProfileICCData struct {
 	DataLength uint32
 	Data       []byte
+}
+
+type ChunkOldPalette struct {
+	header ChunkHeader
+	Colors []ChunkOldPaletteColor
+}
+
+type ChunkOldPaletteData struct {
+	PacketsNumber uint16
+	Packets       []ChunkOldPalettePacket
+}
+
+type ChunkOldPalettePacket struct {
+	PaletteEntriesNumber byte
+	ColorsNumber         byte
+}
+
+type ChunkOldPaletteColor struct {
+	R byte
+	G byte
+	B byte
+}
+
+func (c *ChunkOldPalette) GetHeader() ChunkHeader {
+	return c.header
+}
+
+func (c *ChunkOldPalette) GetType() ChunkDataType {
+	return c.header.Type
 }
 
 func checkMagicNumber(magic, number uint16, from string) error {
@@ -252,7 +281,12 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 	switch ch.Type {
 	case ColorProfileChunkHex:
 		var err error
-		if chunk, err = l.ParseColorProfileChunk(chunk, ch); err != nil {
+		if chunk, err = l.ParseChunkColorProfile(ch); err != nil {
+			return nil, err
+		}
+	case OldPaletteChunkHex:
+		var err error
+		if chunk, err = l.ParseChunkOldPalette(ch); err != nil {
 			return nil, err
 		}
 
@@ -267,7 +301,42 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 	return chunk, nil
 }
 
-func (l *Loader) ParseColorProfileChunk(chunk Chunk, ch ChunkHeader) (Chunk, error) {
+func (l *Loader) ParseChunkOldPalette(ch ChunkHeader) (Chunk, error) {
+	var packetsNumber uint16
+	if err := l.BytesToStructV2(2, &packetsNumber); err != nil {
+		return nil, err
+	}
+
+	colors := make([]ChunkOldPaletteColor, 256)
+	for i := range packetsNumber {
+		var paletteEntriesNumber byte
+		if err := l.BytesToStructV2(1, &paletteEntriesNumber); err != nil {
+			return nil, err
+		}
+
+		var colorsNumber byte
+		if err := l.BytesToStructV2(1, &colorsNumber); err != nil {
+			return nil, err
+		}
+		i += uint16(paletteEntriesNumber)
+		for range colorsNumber {
+			var color ChunkOldPaletteColor
+			if err := l.BytesToStructV2(3, &color); err != nil {
+				return nil, err
+			}
+
+			colors[i] = color
+		}
+	}
+
+	return &ChunkOldPalette{
+		header: ch,
+		Colors: colors,
+	}, nil
+
+}
+
+func (l *Loader) ParseChunkColorProfile(ch ChunkHeader) (Chunk, error) {
 	var cData ChunkColorProfileData
 	err := l.BytesToStructV2(ChunkColorProfileDataSize, &cData)
 	if err != nil {
@@ -286,7 +355,7 @@ func (l *Loader) ParseColorProfileChunk(chunk Chunk, ch ChunkHeader) (Chunk, err
 			return nil, err
 		}
 
-		chunk = &ChunkColorProfileICC{
+		chunk := &ChunkColorProfileICC{
 			ChunkColorProfile: ChunkColorProfile{
 				header:                ch,
 				ChunkColorProfileData: cData,
@@ -298,7 +367,7 @@ func (l *Loader) ParseColorProfileChunk(chunk Chunk, ch ChunkHeader) (Chunk, err
 		}
 		return chunk, nil
 	}
-	chunk = &ChunkColorProfile{
+	chunk := &ChunkColorProfile{
 		header:                ch,
 		ChunkColorProfileData: cData,
 	}

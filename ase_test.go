@@ -3,9 +3,32 @@ package main
 import (
 	"os"
 	"testing"
+	"bytes"
 )
 
 const testFilePath = "./test.aseprite"
+
+func TestChunkOldPalette(t *testing.T) {
+	data := []byte{0x02, 0x00, 0x00, 0x02, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x01, 0x01, 0x00, 0x00, 0xFF}
+	chunkHeader := ChunkHeader{
+		Size: uint32(len(data)) + ChunkHeaderSize,
+		Type: OldPaletteChunkHex,
+	}
+	loader := &Loader{Buffer: new(bytes.Buffer)}
+	_, err := loader.Buffer.Write(data)
+	if err != nil {
+		t.Fatalf("failed to write to buffer: %v", err)
+	}
+
+	_, err = loader.ParseChunkOldPalette(chunkHeader)
+	if err != nil {
+		t.Fatalf("failed to parse ChunkOldPalette: %v", err)
+	}
+
+	if unread := loader.Buffer.Len(); unread != 0 {
+		t.Errorf("expected ChunkOldPalette to be fully read, but %d bytes remain (read %d of %d)", unread, len(data) - unread, len(data))
+	}
+}
 
 func TestDeserializeFile(t *testing.T) {
 	fd, err := os.Open(testFilePath)
