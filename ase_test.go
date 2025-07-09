@@ -95,7 +95,7 @@ func verifyAllDataRead(t *testing.T, ase *AsepriteFile, filepath string) {
 	for _, frame := range ase.Frames {
 		read += int64(FrameHeaderSize)
 		for _, chunk := range frame.Chunks {
-			read += int64(chunk.Header.Size)
+			read += int64(chunk.GetHeader().Size)
 		}
 	}
 

@@ -65,24 +65,82 @@ type FrameHeader struct {
 	ChunkNumber    uint32
 }
 
+type ChunkDataType uint16
+
+const (
+	OldPaletteChunk      ChunkDataType = 0x0004
+	OldPaletteChunk2     ChunkDataType = 0x0011
+	LayerChunk           ChunkDataType = 0x2004
+	CelChunk             ChunkDataType = 0x2005
+	CelExtraChunk        ChunkDataType = 0x2006
+	ColorProfileChunkHex ChunkDataType = 0x2007
+	ExternalFilesChunk   ChunkDataType = 0x2008
+	MaskChunk            ChunkDataType = 0x2016 // DEPRECATED
+	PathChunk            ChunkDataType = 0x2017 // NEVER USED
+	TagsChunk            ChunkDataType = 0x2018
+	PaletteChunk         ChunkDataType = 0x2019
+	UserDataChunk        ChunkDataType = 0x2020
+	SliceChunk           ChunkDataType = 0x2022
+	TilesetChunk         ChunkDataType = 0x2023
+)
+
 const ChunkHeaderSize = 6
 
 type ChunkHeader struct {
 	Size uint32
-	Type uint16
+	Type ChunkDataType
 }
 
-type Chunk struct {
-	Header ChunkHeader
-	Data   []byte
+type Chunk interface {
+	GetHeader() ChunkHeader
+	GetType() ChunkDataType
 }
+
+// type OldpalettechunkData struct {}
+//
+// type Oldpalettechunk2Data struct {}
+//
+// type LayerChunkData struct {}
+
+type ColorProfileType uint16
+
+const (
+	ColorProfileNone ColorProfileType = iota
+	ColorProfileSRGB
+	ColorProfileICC
+)
+
+type ChunkColorProfile struct {
+	header ChunkHeader
+	ChunkColorProfileData
+}
+
+type ChunkColorProfileICC struct {
+	ChunkColorProfile
+	ChunkColorProfileICCData
+}
+
+func (c *ChunkColorProfile) GetHeader() ChunkHeader {
+	return c.header
+}
+
+func (c *ChunkColorProfile) GetType() ChunkDataType {
+	return c.header.Type
+}
+
+const ChunkColorProfileDataSize = 16
 
 // TODO: criar uma struct Fixed
 type ChunkColorProfileData struct {
-	Type  uint16
+	Type  ColorProfileType
 	Flags uint16
 	Gamma int32 // TODO: adjust to FIXED type
 	_     [8]byte
+}
+
+type ChunkColorProfileICCData struct {
+	DataLength uint32
+	Data       []byte
 }
 
 func checkMagicNumber(magic, number uint16, from string) error {
@@ -114,6 +172,7 @@ func (l *Loader) enoughSpaceToRead(size int) bool {
 	return available >= needed
 }
 
+// NOTE: DEPRECATED: use v2
 func BytesToStruct[T any](loader *Loader, size int) (T, error) {
 	var t T
 	if loader.enoughSpaceToRead(size) {
@@ -131,6 +190,24 @@ func BytesToStruct[T any](loader *Loader, size int) (T, error) {
 	}
 
 	return BytesToStruct[T](loader, size)
+}
+
+func (l *Loader) BytesToStructV2(size int, t any) error {
+	if l.enoughSpaceToRead(size) {
+		err := binary.Read(l.Buffer, binary.LittleEndian, t)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	fmt.Println("pegar mais dados do fd")
+	err := l.readToBuffer()
+	if err != nil {
+		return err
+	}
+
+	return l.BytesToStructV2(size, t)
 }
 
 func (l *Loader) loadFrameChunkData(ch ChunkHeader) ([]byte, error) {
@@ -168,6 +245,58 @@ func (l *Loader) ParseHeader() (Header, error) {
 	return header, nil
 }
 
+func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
+	var chunk Chunk
+
+	fmt.Printf("chunk type: %d", ch.Type)
+	switch ch.Type {
+	case ColorProfileChunkHex:
+		var cData ChunkColorProfileData
+		err := l.BytesToStructV2(ChunkColorProfileDataSize, &cData)
+		if err != nil {
+			return nil, err
+		}
+
+		if cData.Type == ColorProfileICC {
+			var iccSize uint32
+			err = l.BytesToStructV2(8, &iccSize)
+			if err != nil {
+				return nil, err
+			}
+			iccData := make([]byte, iccSize)
+			err = l.BytesToStructV2(int(iccSize), &iccData)
+			if err != nil {
+				return nil, err
+			}
+
+			chunk = &ChunkColorProfileICC{
+				ChunkColorProfile: ChunkColorProfile{
+					header:                ch,
+					ChunkColorProfileData: cData,
+				},
+				ChunkColorProfileICCData: ChunkColorProfileICCData{
+					DataLength: iccSize,
+					Data:       iccData,
+				},
+			}
+			break
+		}
+		chunk = &ChunkColorProfile{
+			header:                ch,
+			ChunkColorProfileData: cData,
+		}
+
+	default:
+		l.loadFrameChunkData(ch)
+		cfake := &ChunkColorProfile{
+			header: ch,
+		}
+		return cfake, nil
+	}
+
+	return chunk, nil
+}
+
 func (l *Loader) ParseFrames(header *Header) ([]Frame, error) {
 	frames := make([]Frame, 0)
 
@@ -178,7 +307,7 @@ func (l *Loader) ParseFrames(header *Header) ([]Frame, error) {
 		if err != nil {
 			return nil, err
 		}
-		err = checkMagicNumber(0xF1FA, fh.MagicNumber, "frameheader " + fmt.Sprint(i))
+		err = checkMagicNumber(0xF1FA, fh.MagicNumber, "frameheader "+fmt.Sprint(i))
 		if err != nil {
 			return nil, err
 		}
@@ -195,17 +324,11 @@ func (l *Loader) ParseFrames(header *Header) ([]Frame, error) {
 			}
 
 			fmt.Println("chunkdata to struct")
-			bufchunk, err := l.loadFrameChunkData(ch)
+			var c Chunk
+			c, err = l.ParseChunk(ch)
 			if err != nil {
 				return nil, err
 			}
-
-			c := Chunk{
-				Header: ch,
-				Data:   bufchunk,
-			}
-
-			fmt.Println("Chunk data: ", c.Data)
 
 			chunkList = append(chunkList, c)
 		}
