@@ -251,49 +251,57 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 	fmt.Printf("chunk type: %d", ch.Type)
 	switch ch.Type {
 	case ColorProfileChunkHex:
-		var cData ChunkColorProfileData
-		err := l.BytesToStructV2(ChunkColorProfileDataSize, &cData)
+		var err error
+		if chunk, err = l.ParseColorProfileChunk(chunk, ch); err != nil {
+			return nil, err
+		}
+
+	default:
+		// NOTE: quando definir todos os chunk types, dar erro aqui:
+		// return fmt.Errorf("Invalid chunk type: %d", ch.Type)
+		l.loadFrameChunkData(ch)
+		cfake := &ChunkColorProfile{header: ch}
+		return cfake, nil
+	}
+
+	return chunk, nil
+}
+
+func (l *Loader) ParseColorProfileChunk(chunk Chunk, ch ChunkHeader) (Chunk, error) {
+	var cData ChunkColorProfileData
+	err := l.BytesToStructV2(ChunkColorProfileDataSize, &cData)
+	if err != nil {
+		return nil, err
+	}
+
+	if cData.Type == ColorProfileICC {
+		var iccSize uint32
+		err = l.BytesToStructV2(8, &iccSize)
+		if err != nil {
+			return nil, err
+		}
+		iccData := make([]byte, iccSize)
+		err = l.BytesToStructV2(int(iccSize), &iccData)
 		if err != nil {
 			return nil, err
 		}
 
-		if cData.Type == ColorProfileICC {
-			var iccSize uint32
-			err = l.BytesToStructV2(8, &iccSize)
-			if err != nil {
-				return nil, err
-			}
-			iccData := make([]byte, iccSize)
-			err = l.BytesToStructV2(int(iccSize), &iccData)
-			if err != nil {
-				return nil, err
-			}
-
-			chunk = &ChunkColorProfileICC{
-				ChunkColorProfile: ChunkColorProfile{
-					header:                ch,
-					ChunkColorProfileData: cData,
-				},
-				ChunkColorProfileICCData: ChunkColorProfileICCData{
-					DataLength: iccSize,
-					Data:       iccData,
-				},
-			}
-			break
+		chunk = &ChunkColorProfileICC{
+			ChunkColorProfile: ChunkColorProfile{
+				header:                ch,
+				ChunkColorProfileData: cData,
+			},
+			ChunkColorProfileICCData: ChunkColorProfileICCData{
+				DataLength: iccSize,
+				Data:       iccData,
+			},
 		}
-		chunk = &ChunkColorProfile{
-			header:                ch,
-			ChunkColorProfileData: cData,
-		}
-
-	default:
-		l.loadFrameChunkData(ch)
-		cfake := &ChunkColorProfile{
-			header: ch,
-		}
-		return cfake, nil
+		return chunk, nil
 	}
-
+	chunk = &ChunkColorProfile{
+		header:                ch,
+		ChunkColorProfileData: cData,
+	}
 	return chunk, nil
 }
 
