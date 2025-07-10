@@ -8,6 +8,68 @@ import (
 
 const testFilePath = "./test.aseprite"
 
+func TestChunkLayer(t *testing.T) {
+	data := []byte{
+		0x0B, 0x00,
+		0x00, 0x00,
+		0x00, 0x00,
+		0x00, 0x00,
+		0x00, 0x00,
+		0x00, 0x00,
+		0xFF,
+		0x00, 0x00, 0x00,
+		0x05, 0x00,
+		'L', 'a', 'y', 'e', 'r',
+	}
+
+	chunkHeader := ChunkHeader{
+		Size: uint32(len(data)) + ChunkHeaderSize,
+		Type: LayerChunkHex,
+	}
+
+	tmp, err := os.CreateTemp("", "chunk_layer_test.aseprite")
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+
+	if _, err := tmp.Write(data); err != nil {
+		t.Fatalf("failed to write to temp file: %v", err)
+	}
+	if _, err := tmp.Seek(0, 0); err != nil {
+		t.Fatalf("failed to seek in temp file: %v", err)
+	}
+
+
+	loader := &Loader{Buffer: new(bytes.Buffer), Reader: tmp, Buf: make([]byte, len(data))}
+
+	chunk, err := loader.ParseChunkLayer(chunkHeader)
+
+	if err != nil {
+		t.Fatalf("failed to parse ChunkLayer: %v", err)
+	}
+
+	if chunk.GetType() != LayerChunkHex {
+		t.Errorf("unexpected layer type: got %d, want %d", chunk.GetType(), LayerChunkHex)
+	}
+
+	chunkLayer := chunk.(*ChunkLayer)
+
+	if unread := loader.Buffer.Len(); unread != 0 {
+		t.Errorf("expected ChunkLayer to be fully read, but %d bytes remain (read %d of %d)", unread, len(data) - unread, len(data))
+	}
+
+	if chunkLayer.ChunkLayerData.FlagsBit != 0x000B {
+		t.Errorf("unexpected layer flags: got 0x%X, want 0x000B", chunkLayer.ChunkLayerData.FlagsBit)
+	}
+
+	if !chunkLayer.Visible || !chunkLayer.Editable || !chunkLayer.Background {
+		t.Errorf("unexpected layer flags: got (Visible: %t, Editable: %t, Background: %t), want (Visible: true, Editable: true and Background: true)", chunkLayer.Visible, chunkLayer.Editable, chunkLayer.Background)
+	}
+
+	if chunkLayer.ChunkLayerName != "Layer" {
+		t.Errorf("unexpected layer name: got %q, want \"Layer\"", chunkLayer.ChunkLayerName)
+	}
+}
+
 func TestChunkOldPalette(t *testing.T) {
 	data := []byte{0x02, 0x00, 0x00, 0x02, 0xFF, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x01, 0x01, 0x00, 0x00, 0xFF}
 	chunkHeader := ChunkHeader{
