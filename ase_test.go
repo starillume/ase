@@ -1,9 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"testing"
-	"bytes"
 )
 
 const testFilePath = "./test.aseprite"
@@ -38,7 +38,6 @@ func TestChunkLayer(t *testing.T) {
 		t.Fatalf("failed to seek in temp file: %v", err)
 	}
 
-
 	loader := &Loader{Buffer: new(bytes.Buffer), Reader: tmp, Buf: make([]byte, len(data))}
 
 	chunk, err := loader.ParseChunkLayer(chunkHeader)
@@ -54,7 +53,7 @@ func TestChunkLayer(t *testing.T) {
 	chunkLayer := chunk.(*ChunkLayer)
 
 	if unread := loader.Buffer.Len(); unread != 0 {
-		t.Errorf("expected ChunkLayer to be fully read, but %d bytes remain (read %d of %d)", unread, len(data) - unread, len(data))
+		t.Errorf("expected ChunkLayer to be fully read, but %d bytes remain (read %d of %d)", unread, len(data)-unread, len(data))
 	}
 
 	if chunkLayer.ChunkLayerData.FlagsBit != 0x000B {
@@ -88,7 +87,7 @@ func TestChunkOldPalette(t *testing.T) {
 	}
 
 	if unread := loader.Buffer.Len(); unread != 0 {
-		t.Errorf("expected ChunkOldPalette to be fully read, but %d bytes remain (read %d of %d)", unread, len(data) - unread, len(data))
+		t.Errorf("expected ChunkOldPalette to be fully read, but %d bytes remain (read %d of %d)", unread, len(data)-unread, len(data))
 	}
 }
 
@@ -184,7 +183,7 @@ func verifyAllDataRead(t *testing.T, ase *AsepriteFile, filepath string) {
 		}
 	}
 
-	if fileSize - read > 16 {
-		t.Errorf("expected file to be fully read, but %d bytes remain (read %d of %d)", fileSize - read, read, fileSize)
+	if fileSize-read > 16 {
+		t.Errorf("expected file to be fully read, but %d bytes remain (read %d of %d)", fileSize-read, read, fileSize)
 	}
 }

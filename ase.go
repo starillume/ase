@@ -149,7 +149,7 @@ type ChunkOldPalette struct {
 	Colors []ChunkOldPaletteColor
 }
 
-type ChunkOldPalette2 struct { *ChunkOldPalette } // NOTE: same thing (memory-wise), but each color has values between 0-63
+type ChunkOldPalette2 struct{ *ChunkOldPalette } // NOTE: same thing (memory-wise), but each color has values between 0-63
 
 type ChunkOldPaletteData struct {
 	PacketsNumber uint16
@@ -177,7 +177,7 @@ func (c *ChunkOldPalette) GetType() ChunkDataType {
 }
 
 type ChunkLayer struct {
-	header ChunkHeader
+	header         ChunkHeader
 	ChunkLayerData ChunkLayerData
 	ChunkLayerName
 	ChunkLayerFlags
@@ -188,25 +188,25 @@ type ChunkLayer struct {
 const ChunkLayerDataSize = 18
 
 type ChunkLayerData struct {
-	FlagsBit uint16
-	Type uint16
-	ChildLevel uint16
-	DefaultWidth uint16
+	FlagsBit      uint16
+	Type          uint16
+	ChildLevel    uint16
+	DefaultWidth  uint16
 	DefaultHeight uint16
-	BlendMode uint16
-	Opacity byte
-	_ [3]byte
-	NameLength uint16
+	BlendMode     uint16
+	Opacity       byte
+	_             [3]byte
+	NameLength    uint16
 }
 
 type ChunkLayerFlags struct {
-	Visible bool
-	Editable bool
-	LockMovement bool
-	Background bool
-	PreferLinkedCels bool
+	Visible                    bool
+	Editable                   bool
+	LockMovement               bool
+	Background                 bool
+	PreferLinkedCels           bool
 	LayerGroupDisplayCollapsed bool
-	ReferenceLayer bool
+	ReferenceLayer             bool
 }
 
 type ChunkLayerName string
@@ -364,17 +364,17 @@ func (l *Loader) ParseChunkLayer(ch ChunkHeader) (Chunk, error) {
 	if err := l.BytesToStructV2(ChunkLayerDataSize, &layerData); err != nil {
 		return nil, err
 	}
-	
+
 	nameBytes := make([]byte, layerData.NameLength)
 	if err := l.BytesToStructV2(int(layerData.NameLength), &nameBytes); err != nil {
 		return nil, err
 	}
 	var name ChunkLayerName = ChunkLayerName(string(nameBytes))
 	chunk := &ChunkLayer{
-		header: ch,
-		ChunkLayerData: layerData,
-		ChunkLayerName: name,
-		ChunkLayerType2Data: nil,
+		header:                     ch,
+		ChunkLayerData:             layerData,
+		ChunkLayerName:             name,
+		ChunkLayerType2Data:        nil,
 		ChunkLayerLockMovementData: nil,
 	}
 	if layerData.Type == 2 {
@@ -385,13 +385,13 @@ func (l *Loader) ParseChunkLayer(ch ChunkHeader) (Chunk, error) {
 
 		chunk.ChunkLayerType2Data = &type2Data
 	}
-	
+
 	var flags ChunkLayerFlags = ChunkLayerFlags{}
 	value := reflect.ValueOf(&flags).Elem()
 	fieldIndex := 0
 	for i := uint16(1); i < 65; i *= 2 {
 		field := value.Field(fieldIndex)
-		if layerData.FlagsBit & i == i && field.CanSet() {
+		if layerData.FlagsBit&i == i && field.CanSet() {
 			field.SetBool(true)
 		}
 		fieldIndex++
@@ -440,21 +440,21 @@ func (l *Loader) ParseChunkOldPalette(ch ChunkHeader) (Chunk, error) {
 	}
 
 	switch ch.Type {
-		case OldPaletteChunkHex:
-			return &ChunkOldPalette{
+	case OldPaletteChunkHex:
+		return &ChunkOldPalette{
+			header: ch,
+			Colors: colors,
+		}, nil
+	case OldPaletteChunk2Hex:
+		return &ChunkOldPalette2{
+			ChunkOldPalette: &ChunkOldPalette{
 				header: ch,
 				Colors: colors,
-			}, nil
-		case OldPaletteChunk2Hex:
-			return &ChunkOldPalette2 {
-				ChunkOldPalette: &ChunkOldPalette{
-					header: ch,
-					Colors: colors,
-				},
-			}, nil
-		default:
-			// should be unreachable
-			return nil, fmt.Errorf("Invalid chunk type for parsing OldPaletteChunk: 0x%X", ch.Type)
+			},
+		}, nil
+	default:
+		// should be unreachable
+		return nil, fmt.Errorf("Invalid chunk type for parsing OldPaletteChunk: 0x%X", ch.Type)
 	}
 }
 
