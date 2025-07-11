@@ -382,6 +382,62 @@ type ChunkTagEntryData struct {
 	TagNameSize       uint16
 }
 
+type ChunkSlice struct {
+	header ChunkHeader
+	ChunkSliceData
+	Name string
+	Keys []ChunkSliceKey
+}
+
+const ChunkSliceDataSize = 14
+
+type ChunkSliceData struct {
+	NumberSliceKeys uint32
+	FlagsBit uint32
+	_ uint32
+	NameLength uint16
+}
+
+type ChunkSliceKey struct {
+	ChunkSliceKeyData
+	*ChunkSliceKey9PatchesData
+	*ChunkSliceKeyPivotData
+}
+
+const ChunkSliceKeyDataSize = 20
+
+type ChunkSliceKeyData struct {
+	FrameNumber uint32
+	OriginX int32
+	OriginY int32
+	Width uint32 // (can be 0 if this slice hidden in the animation from the given frame)
+	Height uint32
+}
+
+const ChunkSliceKey9PatchesDataSize = 16
+
+type ChunkSliceKey9PatchesData struct {
+	CenterX int32
+	CenterY int32
+	CenterWidth uint32
+	CenterHeight uint32
+}
+
+const ChunkSliceKeyPivotDataSize = 8
+
+type ChunkSliceKeyPivotData struct {
+	X int32
+	Y int32
+}
+
+func (c *ChunkSlice) GetHeader() ChunkHeader {
+	return c.header
+}
+
+func (c *ChunkSlice) GetType() ChunkDataType {
+	return c.header.Type
+}
+
 func checkMagicNumber(magic, number uint16, from string) error {
 	if number != magic {
 		return fmt.Errorf("%s: magic number fail (got 0x%X, want 0x%X)", from, number, magic)
@@ -518,6 +574,10 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 		if chunk, err = l.ParseChunkTag(ch); err != nil {
 			return nil, err
 		}
+	case SliceChunkHex:
+		if chunk, err = l.ParseChunkSlice(ch); err != nil {
+			return nil, err
+		}
 
 	default:
 		// NOTE: quando definir todos os chunk types, dar erro aqui:
@@ -528,6 +588,55 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 	}
 
 	return chunk, nil
+}
+
+func (l *Loader) ParseChunkSlice(ch ChunkHeader) (Chunk, error) {
+	var chunkSliceData ChunkSliceData
+	if err := l.BytesToStructV2(ChunkSliceDataSize, &chunkSliceData); err != nil {
+		return nil, err
+	}
+
+	chunkSliceName := make([]byte, chunkSliceData.NameLength)
+	if err := l.BytesToStructV2(int(chunkSliceData.NameLength), &chunkSliceName); err != nil {
+		return nil, err
+	}
+	
+	sliceKeys := make([]ChunkSliceKey, chunkSliceData.NumberSliceKeys)
+	for i := 0; i < int(chunkSliceData.NumberSliceKeys); i++ {
+		var sliceKeyData ChunkSliceKeyData
+		if err := l.BytesToStructV2(ChunkSliceKeyDataSize, &sliceKeyData); err != nil {
+			return nil, err
+		}
+		
+		sliceKey := ChunkSliceKey{ChunkSliceKeyData: sliceKeyData, ChunkSliceKeyPivotData: nil, ChunkSliceKey9PatchesData: nil}
+
+		if chunkSliceData.FlagsBit & 1 == 1 {
+			var ninePatchesData ChunkSliceKey9PatchesData
+			if err := l.BytesToStructV2(ChunkSliceKey9PatchesDataSize, &ninePatchesData); err != nil {
+				return nil, err
+			}
+
+			sliceKey.ChunkSliceKey9PatchesData = &ninePatchesData
+		}
+
+		if chunkSliceData.FlagsBit & 2 == 2 {
+			var pivotData ChunkSliceKeyPivotData
+			if err := l.BytesToStructV2(ChunkSliceKeyPivotDataSize, &pivotData); err != nil {
+				return nil, err
+			}
+			
+			sliceKey.ChunkSliceKeyPivotData = &pivotData
+		}
+
+		sliceKeys[i] = sliceKey
+	}
+
+	return &ChunkSlice{
+		header: ch,
+		ChunkSliceData: chunkSliceData,
+		Name: string(chunkSliceName),
+		Keys: sliceKeys,
+	}, nil
 }
 
 func (l *Loader) ParseChunkExternalFiles(ch ChunkHeader) (Chunk, error) {

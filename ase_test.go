@@ -8,6 +8,78 @@ import (
 
 const testFilePath = "./test.aseprite"
 
+func TestChunkSlice(t *testing.T) {
+	data := []byte{
+		0x01, 0x00, 0x00, 0x00, // Number of slice keys = 1
+		0x03, 0x00, 0x00, 0x00, // Flags = 3 (has 9-patch + pivot)
+		0x00, 0x00, 0x00, 0x00, // Reserved
+
+		0x06, 0x00, // Name length = 7
+		'H', 'P', ' ', 'B', 'a', 'r',
+
+		// Slice key
+		0x00, 0x00, 0x00, 0x00, // Frame = 0
+		0x0A, 0x00, 0x00, 0x00, // X = 10
+		0x14, 0x00, 0x00, 0x00, // Y = 20
+		0x64, 0x00, 0x00, 0x00, // Width = 100
+		0x1E, 0x00, 0x00, 0x00, // Height = 30
+
+		0x05, 0x00, 0x00, 0x00, // Center X = 5
+		0x05, 0x00, 0x00, 0x00, // Center Y = 5
+		0x5A, 0x00, 0x00, 0x00, // Center Width = 90
+		0x14, 0x00, 0x00, 0x00, // Center Height = 20
+
+		0x32, 0x00, 0x00, 0x00, // Pivot X = 50
+		0x0F, 0x00, 0x00, 0x00, // Pivot Y = 15
+	}
+
+	chunkHeader := ChunkHeader{
+		Size: uint32(len(data)) + ChunkHeaderSize,
+		Type: SliceChunkHex,
+	}
+
+	tmp, err := os.CreateTemp("", "chunk_slice_test.aseprite")
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+
+	if _, err := tmp.Write(data); err != nil {
+		t.Fatalf("failed to write to temp file: %v", err)
+	}
+	if _, err := tmp.Seek(0, 0); err != nil {
+		t.Fatalf("failed to seek in temp file: %v", err)
+	}
+
+	loader := &Loader{Buffer: new(bytes.Buffer), Reader: tmp, Buf: make([]byte, len(data))}
+
+	chunk, err := loader.ParseChunkSlice(chunkHeader)
+
+	if err != nil {
+		t.Fatalf("failed to parse ChunkSlice: %v", err)
+	}
+
+	if chunk.GetType() != SliceChunkHex {
+		t.Errorf("unexpected chunk type: got %d, want %d", chunk.GetType(), SliceChunkHex)
+	}
+
+	chunkSlice := chunk.(*ChunkSlice)
+	
+	if chunkSlice.Name != "HP Bar" {
+		t.Errorf("unexpected name: got %s, want %s", chunkSlice.Name, "HP Bar")
+	}
+
+	if chunkSlice.Keys[0].OriginX != 10 {
+		t.Errorf("unexpected x key value: got %d, want %d", chunkSlice.Keys[0].X, 10)
+	}
+
+	if chunkSlice.Keys[0].ChunkSliceKeyPivotData.X != 50 {
+		t.Errorf("unexpected x pivot key value: got %d, want %d", chunkSlice.Keys[0].ChunkSliceKeyPivotData.X, 50)
+	}
+
+	if chunkSlice.Keys[0].ChunkSliceKey9PatchesData.CenterWidth != 90 {
+		t.Errorf("unexpected slice nine patches center width: got %d, want %d", chunkSlice.Keys[0].ChunkSliceKey9PatchesData.CenterWidth, 90)
+	}
+}
+
 func TestChunkExternalFiles(t *testing.T) {
 	data := []byte{
 		0x02, 0x00, 0x00, 0x00,
