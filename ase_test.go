@@ -8,6 +8,76 @@ import (
 
 const testFilePath = "./test.aseprite"
 
+func TestChunkPalette(t *testing.T) {
+	data := []byte{
+		0x03, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x02, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		// --- Entry 0 ---
+		0x00, 0x00, // flags
+		0xFF, 0x00, 0x00, // red
+		// --- Entry 1 ---
+		0x00, 0x00, // flags
+		0x00, 0xFF, 0x00, // green
+		// --- Entry 2 ---
+		0x01, 0x00, // flags (has name)
+		0x00, 0x00, 0xFF, // blue
+		// "Azulão" + null
+		0x06, 0x00, 'a', 'z', 'u', 'l', 'a', 'o',
+	}
+
+	chunkHeader := ChunkHeader{
+		Size: uint32(len(data)) + ChunkHeaderSize,
+		Type: PaletteChunkHex,
+	}
+
+	tmp, err := os.CreateTemp("", "chunk_palette_test.aseprite")
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+
+	if _, err := tmp.Write(data); err != nil {
+		t.Fatalf("failed to write to temp file: %v", err)
+	}
+	if _, err := tmp.Seek(0, 0); err != nil {
+		t.Fatalf("failed to seek in temp file: %v", err)
+	}
+
+	loader := &Loader{Buffer: new(bytes.Buffer), Reader: tmp, Buf: make([]byte, len(data))}
+
+	chunk, err := loader.ParseChunkPalette(chunkHeader)
+
+	if err != nil {
+		t.Fatalf("failed to parse ChunkPalette: %v", err)
+	}
+
+	if chunk.GetType() != PaletteChunkHex {
+		t.Errorf("unexpected palette type: got %d, want %d", chunk.GetType(), PaletteChunkHex)
+	}
+
+	chunkPalette := chunk.(*ChunkPalette)
+
+	if unread := loader.Buffer.Len(); unread != 0 {
+		t.Errorf("expected ChunkPalette to be fully read, but %d bytes remain (read %d of %d)", unread, len(data)-unread, len(data))
+	}
+
+	if int(chunkPalette.EntriesNumber) != len(chunkPalette.Entries) {
+		t.Errorf("unexpected entries number: got %d, want %d", len(chunkPalette.Entries), chunkPalette.EntriesNumber)
+	}
+
+	if chunkPalette.From != 0 {
+		t.Errorf("unexpected from: got %d, want %d", chunkPalette.From, 0)
+	}
+
+	if chunkPalette.To != 2 {
+		t.Errorf("unexpected to: got %d, want %d", chunkPalette.To, 2)
+	}
+
+	if chunkPalette.Entries[2].ColorName != "azulao" {
+		t.Errorf("unexpected entry name: got %s, want %s", chunkPalette.Entries[2].ColorName, "Azulão")
+	}
+}
+
 func TestChunkLayer(t *testing.T) {
 	data := []byte{
 		0x0B, 0x00,

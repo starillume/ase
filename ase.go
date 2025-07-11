@@ -227,6 +227,45 @@ func (c *ChunkLayer) GetType() ChunkDataType {
 	return c.header.Type
 }
 
+type ChunkPalette struct {
+	header ChunkHeader
+	ChunkPaletteData
+	Entries []ChunkPaletteEntry
+}
+
+func (c *ChunkPalette) GetHeader() ChunkHeader {
+	return c.header
+}
+
+func (c *ChunkPalette) GetType() ChunkDataType {
+	return c.header.Type
+}
+
+type ChunkPaletteEntry struct {
+	Red       byte
+	Green     byte
+	Blue      byte
+	ColorName string
+}
+
+const ChunkPaletteDataSize = 20
+
+type ChunkPaletteData struct {
+	EntriesNumber uint32
+	From          uint32
+	To            uint32
+	_             [8]byte
+}
+
+const ChunkPaletteEntryDataSize = 5
+
+type ChunkPaletteEntryData struct {
+	HasName uint16
+	Red     byte
+	Green   byte
+	Blue    byte
+}
+
 func checkMagicNumber(magic, number uint16, from string) error {
 	if number != magic {
 		return fmt.Errorf("%s: magic number fail (got 0x%X, want 0x%X)", from, number, magic)
@@ -345,6 +384,10 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 		}
 	case LayerChunkHex:
 		if chunk, err = l.ParseChunkLayer(ch); err != nil {
+			return nil, err
+		}
+	case PaletteChunkHex:
+		if chunk, err = l.ParseChunkPalette(ch); err != nil {
 			return nil, err
 		}
 
@@ -494,6 +537,44 @@ func (l *Loader) ParseChunkColorProfile(ch ChunkHeader) (Chunk, error) {
 		ChunkColorProfileData: cData,
 	}
 	return chunk, nil
+}
+
+func (l *Loader) ParseChunkPalette(ch ChunkHeader) (Chunk, error) {
+	var cData ChunkPaletteData
+	if err := l.BytesToStructV2(ChunkPaletteDataSize, &cData); err != nil {
+		return nil, err
+	}
+
+	entries := make([]ChunkPaletteEntry, 0)
+	for range cData.To - cData.From + 1 {
+		entry := ChunkPaletteEntry{}
+		var entryData ChunkPaletteEntryData
+		if err := l.BytesToStructV2(ChunkPaletteEntryDataSize, &entryData); err != nil {
+			return nil, err
+		}
+
+		if entryData.HasName == 1 {
+			var nameLen uint16
+			if err := l.BytesToStructV2(2, &nameLen); err != nil {
+				return nil, err
+			}
+
+			colorName := make([]byte, nameLen)
+			if err := l.BytesToStructV2(len(colorName), &colorName); err != nil {
+				return nil, err
+			}
+
+			entry.ColorName = string(colorName)
+		}
+		
+		entries = append(entries, entry)
+	}
+
+	return &ChunkPalette{
+		header: ch,
+		ChunkPaletteData: cData,
+		Entries: entries,
+	}, nil
 }
 
 func (l *Loader) ParseFrames(header *Header) ([]Frame, error) {
