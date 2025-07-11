@@ -8,6 +8,71 @@ import (
 
 const testFilePath = "./test.aseprite"
 
+func TestChunkExternalFiles(t *testing.T) {
+	data := []byte{
+		0x02, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+		0x2A, 0x00, 0x00, 0x00,
+		0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x10, 0x00,
+		'p', 'a', 'l', 'e', 't', 't', 'e', '.', 'a', 's', 'e', 'p', 'r', 'i', 't', 'e',
+
+		0x2B, 0x00, 0x00, 0x00,
+		0x01,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x0B, 0x00,
+		't', 'i', 'l', 'e', 's', 'e', 't', '.', 't', 's', 'x',
+	}
+
+	chunkHeader := ChunkHeader{
+		Size: uint32(len(data)) + ChunkHeaderSize,
+		Type: ExternalFilesChunkHex,
+	}
+
+	tmp, err := os.CreateTemp("", "chunk_external_files_test.aseprite")
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+
+	if _, err := tmp.Write(data); err != nil {
+		t.Fatalf("failed to write to temp file: %v", err)
+	}
+	if _, err := tmp.Seek(0, 0); err != nil {
+		t.Fatalf("failed to seek in temp file: %v", err)
+	}
+
+	loader := &Loader{Buffer: new(bytes.Buffer), Reader: tmp, Buf: make([]byte, len(data))}
+
+	chunk, err := loader.ParseChunkExternalFiles(chunkHeader)
+
+	if err != nil {
+		t.Fatalf("failed to parse ChunkExternalFiles: %v", err)
+	}
+
+	if chunk.GetType() != ExternalFilesChunkHex {
+		t.Errorf("unexpected chunk type: got %d, want %d", chunk.GetType(), ExternalFilesChunkHex)
+	}
+
+	chunkExternalFiles := chunk.(*ChunkExternalFiles)
+	
+	if chunkExternalFiles.NumberEntries != 2 {
+		t.Errorf("unexpected number entries value: got %d, want %d", chunkExternalFiles.NumberEntries, 2)
+	}
+
+	if chunkExternalFiles.Entries[0].ID != 42 {
+		t.Errorf("unexpected entry id: got %d, want %d", chunkExternalFiles.Entries[0].ID, 42)
+	}
+
+	if chunkExternalFiles.Entries[0].Type != 0 {
+		t.Errorf("unexpected entry type: got %d, want %d", chunkExternalFiles.Entries[0].Type, 0)
+	}
+
+	if chunkExternalFiles.Entries[0].Name != "palette.aseprite" {
+		t.Errorf("unexpected entry name: got %s, want %s", chunkExternalFiles.Entries[0].Name, "palette.aseprite")
+	}
+}
+
 func TestChunkCelExtra(t *testing.T) {
 	data := []byte{
 		0x01, 0x00, 0x00, 0x00,

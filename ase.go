@@ -133,6 +133,14 @@ const ChunkColorProfileDataSize = 16
 
 type Fixed int32
 
+func FloatToFixed(f float64) Fixed {
+	return Fixed(f * 65536)
+}
+
+func (f *Fixed) FixedToFloat() float64 {
+	return float64(*f) / 65536
+}
+
 type ChunkColorProfileData struct {
 	Type  ColorProfileType
 	Flags uint16
@@ -291,13 +299,42 @@ func (c *ChunkCelExtra) GetType() ChunkDataType {
 	return c.header.Type
 }
 
-func FloatToFixed(f float64) Fixed {
-	return Fixed(f * 65536)
+type ChunkExternalFiles struct {
+	header ChunkHeader
+	ChunkExternalFilesData
+	Entries []ChunkExternalFilesEntry
 }
 
-func (f *Fixed) FixedToFloat() float64 {
-	return float64(*f) / 65536
+const ChunkExternalFilesDataSize = 12
+
+type ChunkExternalFilesData struct {
+	NumberEntries uint32
+	_ [8]byte
 }
+
+type ChunkExternalFilesEntry struct {
+	ChunkExternalFilesEntryData
+	Name string
+}
+
+const ChunkExternalFilesEntryDataSize = 14
+
+type ChunkExternalFilesEntryData struct {
+	ID uint32
+	Type byte
+	_ [7]byte
+	NameLength uint16
+}
+
+
+func (c *ChunkExternalFiles) GetHeader() ChunkHeader {
+	return c.header
+}
+
+func (c *ChunkExternalFiles) GetType() ChunkDataType {
+	return c.header.Type
+}
+
 
 func checkMagicNumber(magic, number uint16, from string) error {
 	if number != magic {
@@ -427,6 +464,10 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 		if chunk, err = l.ParseChunkCelExtra(ch); err != nil {
 			return nil, err
 		}
+	case ExternalFilesChunkHex:
+		if chunk, err = l.ParseChunkExternalFiles(ch); err != nil {
+			return nil, err
+		}
 
 	default:
 		// NOTE: quando definir todos os chunk types, dar erro aqui:
@@ -437,6 +478,34 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 	}
 
 	return chunk, nil
+}
+
+func (l *Loader) ParseChunkExternalFiles(ch ChunkHeader) (Chunk, error) {
+	var externalFilesData ChunkExternalFilesData
+	if err := l.BytesToStructV2(ChunkExternalFilesDataSize, &externalFilesData); err != nil {
+		return nil, err
+	}
+	
+	entries := make([]ChunkExternalFilesEntry, externalFilesData.NumberEntries)
+	for i := 0; i < int(externalFilesData.NumberEntries); i++ {
+		var entryData ChunkExternalFilesEntryData
+		if err := l.BytesToStructV2(ChunkExternalFilesEntryDataSize, &entryData); err != nil {
+			return nil, err
+		}
+		
+		entryName := make([]byte, entryData.NameLength)
+		if err := l.BytesToStructV2(int(entryData.NameLength), &entryName); err != nil {
+			return nil, err
+		}
+		
+		entry := ChunkExternalFilesEntry{
+			ChunkExternalFilesEntryData: entryData,
+			Name: string(entryName),
+		}
+		entries[i] = entry
+	}
+
+	return &ChunkExternalFiles{header: ch, ChunkExternalFilesData: externalFilesData, Entries: entries}, nil
 }
 
 func (l *Loader) ParseChunkCelExtra(ch ChunkHeader) (Chunk, error) {
