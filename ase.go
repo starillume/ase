@@ -335,6 +335,52 @@ func (c *ChunkExternalFiles) GetType() ChunkDataType {
 	return c.header.Type
 }
 
+type ChunkTag struct {
+	header  ChunkHeader
+	Entries []ChunkTagEntry
+}
+
+func (c *ChunkTag) GetHeader() ChunkHeader {
+	return c.header
+}
+
+func (c *ChunkTag) GetType() ChunkDataType {
+	return c.header.Type
+}
+
+type ChunkTagEntry struct {
+	ChunkTagEntryData
+	Name string
+}
+
+const ChunkTagDataSize = 10
+
+type ChunkTagData struct {
+	NumberTags uint16
+	_          [8]byte
+}
+
+type LoopAnimationType byte
+
+const (
+	LoopAnimationForward LoopAnimationType = iota
+	LoopAnimationReverse
+	LoopAnimationPingPong
+	LoopAnimationPingPongReverse
+)
+
+const ChunkTagEntryDataSize = 19
+
+type ChunkTagEntryData struct {
+	FromFrame         uint16
+	ToFrame           uint16
+	LoopAnimationType LoopAnimationType
+	Repeat            uint16
+	_                 [6]byte
+	Color             [3]byte
+	_                 byte
+	TagNameSize       uint16
+}
 
 func checkMagicNumber(magic, number uint16, from string) error {
 	if number != magic {
@@ -466,6 +512,10 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 		}
 	case ExternalFilesChunkHex:
 		if chunk, err = l.ParseChunkExternalFiles(ch); err != nil {
+			return  nil, err
+		}
+	case TagsChunkHex:
+		if chunk, err = l.ParseChunkTag(ch); err != nil {
 			return nil, err
 		}
 
@@ -684,13 +734,45 @@ func (l *Loader) ParseChunkPalette(ch ChunkHeader) (Chunk, error) {
 
 			entry.ColorName = string(colorName)
 		}
-		
+
 		entries = append(entries, entry)
 	}
 
 	return &ChunkPalette{
-		header: ch,
+		header:           ch,
 		ChunkPaletteData: cData,
+		Entries:          entries,
+	}, nil
+}
+
+func (l *Loader) ParseChunkTag(ch ChunkHeader) (Chunk, error) {
+	var cData ChunkTagData
+	if err := l.BytesToStructV2(ChunkTagDataSize, &cData); err != nil {
+		return nil, err
+	}
+
+	entries := make([]ChunkTagEntry, cData.NumberTags)
+	for i := range cData.NumberTags {
+		var entryData ChunkTagEntryData
+		if err := l.BytesToStructV2(ChunkTagEntryDataSize, &entryData); err != nil {
+			return nil, err
+		}
+
+		tagName := make([]byte, entryData.TagNameSize)
+		if err := l.BytesToStructV2(len(tagName), &tagName); err != nil {
+			return nil, err
+		}
+
+		entry := ChunkTagEntry{
+			ChunkTagEntryData: entryData,
+			Name:              string(tagName),
+		}
+
+		entries[i] = entry
+	}
+
+	return &ChunkTag{
+		header:  ch,
 		Entries: entries,
 	}, nil
 }
