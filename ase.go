@@ -131,11 +131,12 @@ func (c *ChunkColorProfile) GetType() ChunkDataType {
 
 const ChunkColorProfileDataSize = 16
 
-// TODO: criar uma struct Fixed
+type Fixed int32
+
 type ChunkColorProfileData struct {
 	Type  ColorProfileType
 	Flags uint16
-	Gamma int32 // TODO: adjust to FIXED type
+	Gamma Fixed
 	_     [8]byte
 }
 
@@ -266,6 +267,38 @@ type ChunkPaletteEntryData struct {
 	Blue    byte
 }
 
+type ChunkCelExtra struct {
+	header ChunkHeader
+	ChunkCelExtraData
+}
+
+const ChunkCelExtraDataSize = 36
+
+type ChunkCelExtraData struct {
+	Flags uint32
+	X Fixed
+	Y Fixed
+	Width Fixed
+	Height Fixed
+	_ [16]byte
+}
+
+func (c *ChunkCelExtra) GetHeader() ChunkHeader {
+	return c.header
+}
+
+func (c *ChunkCelExtra) GetType() ChunkDataType {
+	return c.header.Type
+}
+
+func FloatToFixed(f float64) Fixed {
+	return Fixed(f * 65536)
+}
+
+func (f *Fixed) FixedToFloat() float64 {
+	return float64(*f) / 65536
+}
+
 func checkMagicNumber(magic, number uint16, from string) error {
 	if number != magic {
 		return fmt.Errorf("%s: magic number fail (got 0x%X, want 0x%X)", from, number, magic)
@@ -390,6 +423,10 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 		if chunk, err = l.ParseChunkPalette(ch); err != nil {
 			return nil, err
 		}
+	case CelExtraChunkHex:
+		if chunk, err = l.ParseChunkCelExtra(ch); err != nil {
+			return nil, err
+		}
 
 	default:
 		// NOTE: quando definir todos os chunk types, dar erro aqui:
@@ -400,6 +437,18 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 	}
 
 	return chunk, nil
+}
+
+func (l *Loader) ParseChunkCelExtra(ch ChunkHeader) (Chunk, error) {
+	var celExtraData ChunkCelExtraData
+	if err := l.BytesToStructV2(ChunkCelExtraDataSize, &celExtraData); err != nil {
+		return nil, err
+	}
+
+	return &ChunkCelExtra{
+		header: ch,
+		ChunkCelExtraData: celExtraData,
+	}, nil
 }
 
 func (l *Loader) ParseChunkLayer(ch ChunkHeader) (Chunk, error) {

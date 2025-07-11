@@ -8,6 +8,71 @@ import (
 
 const testFilePath = "./test.aseprite"
 
+func TestChunkCelExtra(t *testing.T) {
+	data := []byte{
+		0x01, 0x00, 0x00, 0x00,
+		0x00, 0x80, 0xFE, 0xFF,
+		0x00, 0x40, 0x02, 0x00,
+		0x00, 0x00, 0x20, 0x00,
+		0x00, 0x00, 0x20, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+	}
+
+	chunkHeader := ChunkHeader{
+		Size: uint32(len(data)) + ChunkHeaderSize,
+		Type: CelExtraChunkHex,
+	}
+
+	tmp, err := os.CreateTemp("", "chunk_cel_extra_test.aseprite")
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+
+	if _, err := tmp.Write(data); err != nil {
+		t.Fatalf("failed to write to temp file: %v", err)
+	}
+	if _, err := tmp.Seek(0, 0); err != nil {
+		t.Fatalf("failed to seek in temp file: %v", err)
+	}
+
+	loader := &Loader{Buffer: new(bytes.Buffer), Reader: tmp, Buf: make([]byte, len(data))}
+
+	chunk, err := loader.ParseChunkCelExtra(chunkHeader)
+
+	if err != nil {
+		t.Fatalf("failed to parse ChunkPalette: %v", err)
+	}
+
+	if chunk.GetType() != CelExtraChunkHex {
+		t.Errorf("unexpected chunk type: got %d, want %d", chunk.GetType(), CelExtraChunkHex)
+	}
+
+	chunkCelExtra := chunk.(*ChunkCelExtra)
+
+	if chunkCelExtra.Flags != 1 {
+		t.Errorf("unexpected flags value: got %d, want %d", chunkCelExtra.Flags, 1)
+	}
+
+	if chunkCelExtra.X.FixedToFloat() != -1.5 {
+		t.Errorf("unexpected X value: got %f, want %f", chunkCelExtra.X.FixedToFloat(), -1.5)
+	}
+
+	if chunkCelExtra.Y.FixedToFloat() != 2.25 {
+		t.Errorf("unexpected Y value: got %f, want %f", chunkCelExtra.Y.FixedToFloat(), 2.25)
+	}
+
+	if chunkCelExtra.Width.FixedToFloat() != 32.0 {
+		t.Errorf("unexpected Width value: got %f, want %f", chunkCelExtra.Width.FixedToFloat(), 32.0)
+	}
+
+	if chunkCelExtra.Height.FixedToFloat() != 32.0 {
+		t.Errorf("unexpected Height value: got %f, want %f", chunkCelExtra.Height.FixedToFloat(), 32.0)
+	}
+}
+
+
 func TestChunkPalette(t *testing.T) {
 	data := []byte{
 		0x03, 0x00, 0x00, 0x00,
