@@ -84,6 +84,77 @@ func TestChunkTileset(t *testing.T) {
 	}
 }
 
+func TestChunkTag(t *testing.T) {
+	data := []byte{
+		0x01, 0x00,             // Number of tags = 1
+		0x00, 0x00, 0x00, 0x00, // Reserved (8 bytes)
+		0x00, 0x00, 0x00, 0x00,
+
+		// Tag 1
+		0x00, 0x00,             // From frame = 0
+		0x05, 0x00,             // To frame = 5
+		0x02,                   // Loop direction = 2 (ping-pong)
+		0x03, 0x00,             // Repeat = 3
+
+		// Reserved 6 bytes
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+		// RGB color (deprecated)
+		0xFF, 0x00, 0x80,       // RGB = (255, 0, 128)
+		0x00,                   // Extra byte (zero)
+
+		// STRING: "Run"
+		0x03, 0x00,             // Length = 3
+		'R', 'u', 'n',
+	}
+
+	chunkHeader := ChunkHeader{
+		Size: uint32(len(data)) + ChunkHeaderSize,
+		Type: TagsChunkHex,
+	}
+
+	tmp, err := os.CreateTemp("", "chunk_tag_test.aseprite")
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+
+	if _, err := tmp.Write(data); err != nil {
+		t.Fatalf("failed to write to temp file: %v", err)
+	}
+	if _, err := tmp.Seek(0, 0); err != nil {
+		t.Fatalf("failed to seek in temp file: %v", err)
+	}
+
+	loader := &Loader{Buffer: new(bytes.Buffer), Reader: tmp, Buf: make([]byte, len(data))}
+
+	chunk, err := loader.ParseChunkTag(chunkHeader)
+
+	if err != nil {
+		t.Fatalf("failed to parse ChunkTag: %v", err)
+	}
+
+	if chunk.GetType() != TagsChunkHex {
+		t.Errorf("unexpected chunk type: got %d, want %d", chunk.GetType(), TagsChunkHex)
+	}
+
+	chunkTag := chunk.(*ChunkTag)
+
+	if len(chunkTag.Entries) != 1 {
+		t.Errorf("unexpected number of chunk tag entries: got %d, want %d", len(chunkTag.Entries), 1)
+	}
+
+	if chunkTag.Entries[0].Name != "Run" {
+		t.Errorf("unexpected chunk tag entry name: got %s, want %s", chunkTag.Entries[0].Name, "Run")
+	}
+
+	if chunkTag.Entries[0].Name != "Run" {
+		t.Errorf("unexpected chunk tag entry name: got %s, want %s", chunkTag.Entries[0].Name, "Run")
+	}
+
+	if chunkTag.Entries[0].LoopAnimationType != 2 {
+		t.Errorf("unexpected chunk tag entry loop type: got %d, want %d", chunkTag.Entries[0].LoopAnimationType, 2)
+	}
+}
+
 func TestChunkSlice(t *testing.T) {
 	data := []byte{
 		0x01, 0x00, 0x00, 0x00, // Number of slice keys = 1
