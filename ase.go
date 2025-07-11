@@ -438,6 +438,57 @@ func (c *ChunkSlice) GetType() ChunkDataType {
 	return c.header.Type
 }
 
+type ChunkTileset struct {
+	header ChunkHeader
+	ChunkTilesetData
+	Name string
+	Flags ChunkTilesetFlags
+	*ChunkTilesetLinkExternalFileData
+	*ChunkTilesetTilesData
+}
+
+const ChunkTilesetDataSize = 34
+
+type ChunkTilesetData struct {
+	ID uint32
+	FlagsBit uint32
+	TilesNumber uint32
+	TileWidth uint16
+	TileHeight uint16
+	BaseIndex int16
+	_ [14]byte
+	NameLength uint16
+}
+
+type ChunkTilesetFlags struct {
+	LinkExternalFile bool
+	LinkTiles bool
+	UseTileID0 bool
+	AutoFlipX bool
+	AutoFlipY bool
+	AutoFlipD bool
+}
+
+const ChunkTilesetLinkExternalFileDataSize = 8
+
+type ChunkTilesetLinkExternalFileData struct {
+	ExternalFileID uint32
+	ExternalFileTilesetID uint32
+}
+
+type ChunkTilesetTilesData struct {
+	DataLength uint32
+	CompressedTileset []byte
+}
+
+func (c *ChunkTileset) GetHeader() ChunkHeader {
+	return c.header
+}
+
+func (c *ChunkTileset) GetType() ChunkDataType {
+	return c.header.Type
+}
+
 func checkMagicNumber(magic, number uint16, from string) error {
 	if number != magic {
 		return fmt.Errorf("%s: magic number fail (got 0x%X, want 0x%X)", from, number, magic)
@@ -578,6 +629,10 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 		if chunk, err = l.ParseChunkSlice(ch); err != nil {
 			return nil, err
 		}
+	case TilesetChunkHex:
+		if chunk, err = l.ParseChunkTileset(ch); err != nil {
+			return nil, err
+		}
 
 	default:
 		// NOTE: quando definir todos os chunk types, dar erro aqui:
@@ -588,6 +643,66 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 	}
 
 	return chunk, nil
+}
+
+func (l *Loader) ParseChunkTileset(ch ChunkHeader) (Chunk, error) {
+	var tilesetData ChunkTilesetData
+	if err := l.BytesToStructV2(ChunkTilesetDataSize, &tilesetData); err != nil {
+		return nil, err
+	}
+
+	nameBytes := make([]byte, tilesetData.NameLength)
+	if err := l.BytesToStructV2(int(tilesetData.NameLength), &nameBytes); err != nil {
+		return nil, err
+	}
+
+	var flags ChunkTilesetFlags = ChunkTilesetFlags{}
+	value := reflect.ValueOf(&flags).Elem()
+	fieldIndex := 0
+	for i := uint32(1); i < 33; i *= 2 {
+		field := value.Field(fieldIndex)
+		if tilesetData.FlagsBit&i == i && field.CanSet() {
+			field.SetBool(true)
+		}
+		fieldIndex++
+	}
+
+	chunk := ChunkTileset{
+		header: ch,
+		ChunkTilesetData: tilesetData,
+		Name: string(nameBytes),
+		Flags: flags,
+		ChunkTilesetLinkExternalFileData: nil,
+		ChunkTilesetTilesData: nil,
+	}
+	
+	if chunk.Flags.LinkExternalFile {
+		var externalFileData ChunkTilesetLinkExternalFileData
+		if err := l.BytesToStructV2(ChunkTilesetLinkExternalFileDataSize, &externalFileData); err != nil {
+			return nil, err
+		}
+
+		chunk.ChunkTilesetLinkExternalFileData = &externalFileData
+	}
+
+	if chunk.Flags.LinkTiles {
+		var dataLength uint32
+		if err := l.BytesToStructV2(4, &dataLength); err != nil {
+			return nil, err
+		}
+
+		data := make([]byte, dataLength)
+		if err := l.BytesToStructV2(int(dataLength), &data); err != nil {
+			return nil, err
+		}
+
+		chunk.ChunkTilesetTilesData = &ChunkTilesetTilesData{
+			DataLength: dataLength,
+			CompressedTileset: data,
+		}
+	}
+	
+	return &chunk, nil
 }
 
 func (l *Loader) ParseChunkSlice(ch ChunkHeader) (Chunk, error) {

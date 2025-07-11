@@ -8,6 +8,82 @@ import (
 
 const testFilePath = "./test.aseprite"
 
+func TestChunkTileset(t *testing.T) {
+	data := []byte{
+		0x11, 0x00, 0x00, 0x00, // Tileset ID = 17
+		0x3F, 0x00, 0x00, 0x00, // Flags = 63
+		0x02, 0x00, 0x00, 0x00, // Number of tiles = 2
+		0x10, 0x00,             // Tile width = 16
+		0x10, 0x00,             // Tile height = 16
+		0x01, 0x00,             // Base index = 1
+
+		// Reserved 14 bytes
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00,
+
+		// STRING: "Terrain"
+		0x07, 0x00,             // Length = 7
+		'T', 'e', 'r', 'r', 'a', 'i', 'n',
+
+		// Flag 1 → external file link
+		0x2A, 0x00, 0x00, 0x00, // External file ID = 42
+		0x07, 0x00, 0x00, 0x00, // External tileset ID = 7
+
+		// Flag 2 → inline image data
+		0x0A, 0x00, 0x00, 0x00, // Length = 10 bytes
+		0xDE, 0xAD, 0xBE, 0xEF, 0xCA,
+		0xFE, 0xBA, 0xBE, 0x00, 0x01, // Fake compressed data
+	}
+
+	chunkHeader := ChunkHeader{
+		Size: uint32(len(data)) + ChunkHeaderSize,
+		Type: TilesetChunkHex,
+	}
+
+	tmp, err := os.CreateTemp("", "chunk_tileset_test.aseprite")
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+
+	if _, err := tmp.Write(data); err != nil {
+		t.Fatalf("failed to write to temp file: %v", err)
+	}
+	if _, err := tmp.Seek(0, 0); err != nil {
+		t.Fatalf("failed to seek in temp file: %v", err)
+	}
+
+	loader := &Loader{Buffer: new(bytes.Buffer), Reader: tmp, Buf: make([]byte, len(data))}
+
+	chunk, err := loader.ParseChunkTileset(chunkHeader)
+
+	if err != nil {
+		t.Fatalf("failed to parse ChunkTileset: %v", err)
+	}
+
+	if chunk.GetType() != TilesetChunkHex {
+		t.Errorf("unexpected chunk type: got %d, want %d", chunk.GetType(), TilesetChunkHex)
+	}
+
+	chunkTileset := chunk.(*ChunkTileset)
+	
+	if chunkTileset.Name != "Terrain" {
+		t.Errorf("unexpected name: got %s, want %s", chunkTileset.Name, "Terrain")
+	}
+
+	if !chunkTileset.Flags.LinkExternalFile || !chunkTileset.Flags.LinkTiles || !chunkTileset.Flags.UseTileID0 || !chunkTileset.Flags.AutoFlipX || !chunkTileset.Flags.AutoFlipY || !chunkTileset.Flags.AutoFlipD {
+		t.Errorf("unexpected layer flags: got (%t, %t, %t, %t, %t, %t), want (true, true, true, true, true, true)", chunkTileset.Flags.LinkExternalFile, chunkTileset.Flags.LinkTiles, chunkTileset.Flags.UseTileID0, chunkTileset.Flags.AutoFlipX, chunkTileset.Flags.AutoFlipY, chunkTileset.Flags.AutoFlipD)
+	}
+
+	if chunkTileset.ChunkTilesetLinkExternalFileData.ExternalFileID != 42 {
+		t.Errorf("unexpected external file id: got %d, want %d", chunkTileset.ChunkTilesetLinkExternalFileData.ExternalFileID, 42)
+	}
+
+	if chunkTileset.ChunkTilesetTilesData.DataLength != 10 {
+		t.Errorf("unexpected tiles data length: got %d, want %d", chunkTileset.ChunkTilesetTilesData.DataLength, 10)
+	}
+}
+
 func TestChunkSlice(t *testing.T) {
 	data := []byte{
 		0x01, 0x00, 0x00, 0x00, // Number of slice keys = 1
