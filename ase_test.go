@@ -636,7 +636,7 @@ func verifyFrames(t *testing.T, ase *AsepriteFile) {
 		t.Errorf("expected %d frames, got %d", expectedFrameCount, len(ase.Frames))
 	}
 
-	expectedChunks := []int{4, 1, 1, 1, 1, 1, 1, 1}
+	expectedChunks := []int{5, 1, 1, 1, 1, 1, 1, 1}
 	for i, frame := range ase.Frames {
 		if frame.Header.MagicNumber != 0xF1FA {
 			t.Errorf("frame %d has invalid magic number: got 0x%X, want 0xF1FA", i, frame.Header.MagicNumber)

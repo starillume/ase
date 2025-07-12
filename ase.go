@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"sync"
 )
 
 const (
@@ -292,12 +293,12 @@ type ChunkCelExtra struct {
 const ChunkCelExtraDataSize = 36
 
 type ChunkCelExtraData struct {
-	Flags uint32
-	X Fixed
-	Y Fixed
-	Width Fixed
+	Flags  uint32
+	X      Fixed
+	Y      Fixed
+	Width  Fixed
 	Height Fixed
-	_ [16]byte
+	_      [16]byte
 }
 
 func (c *ChunkCelExtra) GetHeader() ChunkHeader {
@@ -318,7 +319,7 @@ const ChunkExternalFilesDataSize = 12
 
 type ChunkExternalFilesData struct {
 	NumberEntries uint32
-	_ [8]byte
+	_             [8]byte
 }
 
 type ChunkExternalFilesEntry struct {
@@ -329,12 +330,11 @@ type ChunkExternalFilesEntry struct {
 const ChunkExternalFilesEntryDataSize = 14
 
 type ChunkExternalFilesEntryData struct {
-	ID uint32
-	Type byte
-	_ [7]byte
+	ID         uint32
+	Type       byte
+	_          [7]byte
 	NameLength uint16
 }
-
 
 func (c *ChunkExternalFiles) GetHeader() ChunkHeader {
 	return c.header
@@ -402,9 +402,9 @@ const ChunkSliceDataSize = 14
 
 type ChunkSliceData struct {
 	NumberSliceKeys uint32
-	FlagsBit uint32
-	_ uint32
-	NameLength uint16
+	FlagsBit        uint32
+	_               uint32
+	NameLength      uint16
 }
 
 type ChunkSliceKey struct {
@@ -417,18 +417,18 @@ const ChunkSliceKeyDataSize = 20
 
 type ChunkSliceKeyData struct {
 	FrameNumber uint32
-	OriginX int32
-	OriginY int32
-	Width uint32 // (can be 0 if this slice hidden in the animation from the given frame)
-	Height uint32
+	OriginX     int32
+	OriginY     int32
+	Width       uint32 // (can be 0 if this slice hidden in the animation from the given frame)
+	Height      uint32
 }
 
 const ChunkSliceKey9PatchesDataSize = 16
 
 type ChunkSliceKey9PatchesData struct {
-	CenterX int32
-	CenterY int32
-	CenterWidth uint32
+	CenterX      int32
+	CenterY      int32
+	CenterWidth  uint32
 	CenterHeight uint32
 }
 
@@ -450,7 +450,7 @@ func (c *ChunkSlice) GetType() ChunkDataType {
 type ChunkTileset struct {
 	header ChunkHeader
 	ChunkTilesetData
-	Name string
+	Name  string
 	Flags ChunkTilesetFlags
 	*ChunkTilesetLinkExternalFileData
 	*ChunkTilesetTilesData
@@ -459,34 +459,34 @@ type ChunkTileset struct {
 const ChunkTilesetDataSize = 34
 
 type ChunkTilesetData struct {
-	ID uint32
-	FlagsBit uint32
+	ID          uint32
+	FlagsBit    uint32
 	TilesNumber uint32
-	TileWidth uint16
-	TileHeight uint16
-	BaseIndex int16
-	_ [14]byte
-	NameLength uint16
+	TileWidth   uint16
+	TileHeight  uint16
+	BaseIndex   int16
+	_           [14]byte
+	NameLength  uint16
 }
 
 type ChunkTilesetFlags struct {
 	LinkExternalFile bool
-	LinkTiles bool
-	UseTileID0 bool
-	AutoFlipX bool
-	AutoFlipY bool
-	AutoFlipD bool
+	LinkTiles        bool
+	UseTileID0       bool
+	AutoFlipX        bool
+	AutoFlipY        bool
+	AutoFlipD        bool
 }
 
 const ChunkTilesetLinkExternalFileDataSize = 8
 
 type ChunkTilesetLinkExternalFileData struct {
-	ExternalFileID uint32
+	ExternalFileID        uint32
 	ExternalFileTilesetID uint32
 }
 
 type ChunkTilesetTilesData struct {
-	DataLength uint32
+	DataLength        uint32
 	CompressedTileset []byte
 }
 
@@ -651,6 +651,86 @@ type ChunkCelCompressedTilemapData struct {
 	Tiles PixelsCompressed // NOTE: não sei como fazer esse negocio, voltar depois
 }
 
+const UserDataFlagSize = 4
+
+type UserDataFlag uint32
+
+const (
+	UserDataHasText       UserDataFlag = 1 << 0
+	UserDataHasColor      UserDataFlag = 1 << 1
+	UserDataHasProperties UserDataFlag = 1 << 2
+)
+
+type ChunkUserData struct {
+	header ChunkHeader
+	Text   string
+	Color  *ChunkUserDataColor
+	Maps   *[]ChunkUserDataPropMap
+}
+
+func (c *ChunkUserData) GetHeader() ChunkHeader {
+	return c.header
+}
+
+func (c *ChunkUserData) GetType() ChunkDataType {
+	return c.header.Type
+}
+
+type ChunkUserDataPropMap struct {
+	External bool
+	Props    map[string]any
+}
+
+type ChunkUserDataTextSize uint32
+
+const ChunkUserDataColorSize = 4
+
+type ChunkUserDataColor struct {
+	R byte
+	G byte
+	B byte
+	A byte
+}
+
+const ChunkUserDataPropMapHeaderSize = 8
+
+type ChunkUserDataPropMapHeader struct {
+	SizeInBytes    uint32
+	PropMapNumbers uint32
+}
+
+const ChunkUserDataPropMapDataSize = 8
+
+type ChunkUserDataPropMapData struct {
+	PropKey     uint32
+	PropNumbers uint32
+}
+
+type UserDataPropType uint16
+
+const (
+	UserDataNil UserDataPropType = iota
+	UserDataBool
+	UserDataInt8
+	UserDataUint8
+	UserDataInt16
+	UserDataUint16
+	UserDataInt32
+	UserDataUint32
+	UserDataInt64
+	UserDataUint64
+	UserDataFixed
+	UserDataFloat
+	UserDataDouble
+	UserDataString
+	UserDataPoint
+	UserDataSize
+	UserDataRect
+	UserDataVector
+	UserDataProp
+	UserDataUUID
+)
+
 func checkMagicNumber(magic, number uint16, from string) error {
 	if number != magic {
 		return fmt.Errorf("%s: magic number fail (got 0x%X, want 0x%X)", from, number, magic)
@@ -781,7 +861,7 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 		}
 	case ExternalFilesChunkHex:
 		if chunk, err = l.ParseChunkExternalFiles(ch); err != nil {
-			return  nil, err
+			return nil, err
 		}
 	case TagsChunkHex:
 		if chunk, err = l.ParseChunkTag(ch); err != nil {
@@ -797,6 +877,10 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 		}
 	case CelChunkHex:
 		if chunk, err = l.ParseChunkCel(ch); err != nil {
+			return nil, err
+		}
+	case UserDataChunkHex:
+		if chunk, err = l.ParseChunkUserData(ch); err != nil {
 			return nil, err
 		}
 
@@ -834,14 +918,14 @@ func (l *Loader) ParseChunkTileset(ch ChunkHeader) (Chunk, error) {
 	}
 
 	chunk := ChunkTileset{
-		header: ch,
-		ChunkTilesetData: tilesetData,
-		Name: string(nameBytes),
-		Flags: flags,
+		header:                           ch,
+		ChunkTilesetData:                 tilesetData,
+		Name:                             string(nameBytes),
+		Flags:                            flags,
 		ChunkTilesetLinkExternalFileData: nil,
-		ChunkTilesetTilesData: nil,
+		ChunkTilesetTilesData:            nil,
 	}
-	
+
 	if chunk.Flags.LinkExternalFile {
 		var externalFileData ChunkTilesetLinkExternalFileData
 		if err := l.BytesToStructV2(ChunkTilesetLinkExternalFileDataSize, &externalFileData); err != nil {
@@ -863,11 +947,11 @@ func (l *Loader) ParseChunkTileset(ch ChunkHeader) (Chunk, error) {
 		}
 
 		chunk.ChunkTilesetTilesData = &ChunkTilesetTilesData{
-			DataLength: dataLength,
+			DataLength:        dataLength,
 			CompressedTileset: data,
 		}
 	}
-	
+
 	return &chunk, nil
 }
 
@@ -881,17 +965,17 @@ func (l *Loader) ParseChunkSlice(ch ChunkHeader) (Chunk, error) {
 	if err := l.BytesToStructV2(int(chunkSliceData.NameLength), &chunkSliceName); err != nil {
 		return nil, err
 	}
-	
+
 	sliceKeys := make([]ChunkSliceKey, chunkSliceData.NumberSliceKeys)
 	for i := 0; i < int(chunkSliceData.NumberSliceKeys); i++ {
 		var sliceKeyData ChunkSliceKeyData
 		if err := l.BytesToStructV2(ChunkSliceKeyDataSize, &sliceKeyData); err != nil {
 			return nil, err
 		}
-		
+
 		sliceKey := ChunkSliceKey{ChunkSliceKeyData: sliceKeyData, ChunkSliceKeyPivotData: nil, ChunkSliceKey9PatchesData: nil}
 
-		if chunkSliceData.FlagsBit & 1 == 1 {
+		if chunkSliceData.FlagsBit&1 == 1 {
 			var ninePatchesData ChunkSliceKey9PatchesData
 			if err := l.BytesToStructV2(ChunkSliceKey9PatchesDataSize, &ninePatchesData); err != nil {
 				return nil, err
@@ -900,12 +984,12 @@ func (l *Loader) ParseChunkSlice(ch ChunkHeader) (Chunk, error) {
 			sliceKey.ChunkSliceKey9PatchesData = &ninePatchesData
 		}
 
-		if chunkSliceData.FlagsBit & 2 == 2 {
+		if chunkSliceData.FlagsBit&2 == 2 {
 			var pivotData ChunkSliceKeyPivotData
 			if err := l.BytesToStructV2(ChunkSliceKeyPivotDataSize, &pivotData); err != nil {
 				return nil, err
 			}
-			
+
 			sliceKey.ChunkSliceKeyPivotData = &pivotData
 		}
 
@@ -913,11 +997,294 @@ func (l *Loader) ParseChunkSlice(ch ChunkHeader) (Chunk, error) {
 	}
 
 	return &ChunkSlice{
-		header: ch,
+		header:         ch,
 		ChunkSliceData: chunkSliceData,
-		Name: string(chunkSliceName),
-		Keys: sliceKeys,
+		Name:           string(chunkSliceName),
+		Keys:           sliceKeys,
 	}, nil
+}
+
+type readerFunc func(*Loader) (any, error)
+
+var (
+	readers        map[UserDataPropType]readerFunc
+	initReaderSync sync.Once
+)
+
+func getReaders() map[UserDataPropType]readerFunc {
+	initReaderSync.Do(initReaders)
+	return readers
+}
+
+func initReaders() {
+	readers = map[UserDataPropType]readerFunc{
+		UserDataBool: func(l *Loader) (any, error) {
+			var b uint8 // BYTE
+			if err := l.BytesToStructV2(1, &b); err != nil {
+				return nil, err
+			}
+			return b != 0, nil
+		},
+
+		UserDataInt8: func(l *Loader) (any, error) {
+			var v int8 // BYTE interpretado como signed
+			return v, l.BytesToStructV2(1, &v)
+		},
+
+		UserDataUint8: func(l *Loader) (any, error) {
+			var v uint8
+			return v, l.BytesToStructV2(1, &v)
+		},
+
+		UserDataInt16: func(l *Loader) (any, error) {
+			var v int16 // SHORT
+			return v, l.BytesToStructV2(2, &v)
+		},
+
+		UserDataUint16: func(l *Loader) (any, error) {
+			var v uint16 // WORD
+			return v, l.BytesToStructV2(2, &v)
+		},
+
+		UserDataInt32: func(l *Loader) (any, error) {
+			var v int32 // LONG
+			return v, l.BytesToStructV2(4, &v)
+		},
+
+		UserDataUint32: func(l *Loader) (any, error) {
+			var v uint32 // DWORD
+			return v, l.BytesToStructV2(4, &v)
+		},
+
+		UserDataInt64: func(l *Loader) (any, error) {
+			var v int64 // LONG64
+			return v, l.BytesToStructV2(8, &v)
+		},
+
+		UserDataUint64: func(l *Loader) (any, error) {
+			var v uint64 // QWORD
+			return v, l.BytesToStructV2(8, &v)
+		},
+
+		UserDataFixed: func(l *Loader) (any, error) {
+			var v Fixed // FIXED (16.16)
+			return v, l.BytesToStructV2(4, &v)
+		},
+
+		UserDataFloat: func(l *Loader) (any, error) {
+			var v float32 // FLOAT
+			return v, l.BytesToStructV2(4, &v)
+		},
+
+		UserDataDouble: func(l *Loader) (any, error) {
+			var v float64 // DOUBLE
+			return v, l.BytesToStructV2(8, &v)
+		},
+
+		UserDataString: func(l *Loader) (any, error) {
+			var length uint16 // WORD
+			if err := l.BytesToStructV2(2, &length); err != nil {
+				return nil, err
+			}
+			data := make([]byte, length)
+			if err := l.BytesToStructV2(int(length), &data); err != nil {
+				return nil, err
+			}
+			return string(data), nil // UTF-8, sem \0
+		},
+
+		UserDataPoint: func(l *Loader) (any, error) {
+			var p struct {
+				X int32 // LONG
+				Y int32 // LONG
+			}
+			return p, l.BytesToStructV2(8, &p)
+		},
+
+		UserDataSize: func(l *Loader) (any, error) {
+			var s struct {
+				W int32 // LONG
+				H int32 // LONG
+			}
+			return s, l.BytesToStructV2(8, &s)
+		},
+
+		UserDataRect: func(l *Loader) (any, error) {
+			var r struct {
+				X int32
+				Y int32
+				W int32
+				H int32
+			}
+			return r, l.BytesToStructV2(16, &r)
+		},
+
+		UserDataVector: func(l *Loader) (any, error) {
+			var count uint32 // DWORD
+			if err := l.BytesToStructV2(4, &count); err != nil {
+				return nil, err
+			}
+
+			var elemType uint16 // WORD
+			if err := l.BytesToStructV2(2, &elemType); err != nil {
+				return nil, err
+			}
+
+			var elements []any
+
+			if elemType == 0 {
+				// Heterogêneo: cada elemento tem tipo próprio
+				for i := 0; i < int(count); i++ {
+					var etype uint16
+					if err := l.BytesToStructV2(2, &etype); err != nil {
+						return nil, err
+					}
+					reader, ok := getReaders()[UserDataPropType(etype)]
+					if !ok {
+						return nil, fmt.Errorf("unsupported vector element type %d", etype)
+					}
+					val, err := reader(l)
+					if err != nil {
+						return nil, err
+					}
+					elements = append(elements, val)
+				}
+			} else {
+				// Homogêneo: todos elementos têm o mesmo tipo
+				reader, ok := getReaders()[UserDataPropType(elemType)]
+				if !ok {
+					return nil, fmt.Errorf("unsupported vector element type %d", elemType)
+				}
+				for i := 0; i < int(count); i++ {
+					val, err := reader(l)
+					if err != nil {
+						return nil, err
+					}
+					elements = append(elements, val)
+				}
+			}
+
+			return elements, nil
+		},
+
+		UserDataUUID: func(l *Loader) (any, error) {
+			var uuid [16]byte
+			return uuid, l.BytesToStructV2(16, &uuid)
+		},
+
+		UserDataProp: func(l *Loader) (any, error) {
+			var propsLen uint32
+			if err := l.BytesToStructV2(4, &propsLen); err != nil {
+				return nil, err
+			}
+
+			return l.ParseUserDataProps(int(propsLen))
+		},
+	}
+}
+
+func (l *Loader) ParseUserDataProps(count int) (map[string]any, error) {
+	props := make(map[string]any, count)
+	for range count {
+		var nameLen uint16
+		if err := l.BytesToStructV2(2, &nameLen); err != nil {
+			return nil, err
+		}
+
+		nameBytes := make([]byte, nameLen)
+		if err := l.BytesToStructV2(int(nameLen), &nameBytes); err != nil {
+			return nil, err
+		}
+
+		key := string(nameBytes)
+
+		var typeValue UserDataPropType
+		if err := l.BytesToStructV2(2, &typeValue); err != nil {
+			return nil, err
+		}
+
+		if reader, ok := getReaders()[typeValue]; ok {
+			value, err := reader(l)
+			if err != nil {
+				return nil, err
+			}
+			props[key] = value
+		} else {
+			return nil, fmt.Errorf("unsupported type %d", typeValue)
+		}
+	}
+
+	return props, nil
+}
+
+func (l *Loader) ParseUserDataPropMap() (*ChunkUserDataPropMap, error) {
+	var propMapData ChunkUserDataPropMapData
+	if err := l.BytesToStructV2(ChunkUserDataPropMapHeaderSize, &propMapData); err != nil {
+		return nil, err
+	}
+
+	propMap := &ChunkUserDataPropMap{
+		External: (propMapData.PropKey != 0),
+	}
+
+	propsmap, err := l.ParseUserDataProps(int(propMapData.PropNumbers))
+	if err != nil {
+		return nil, err
+	}
+
+	propMap.Props = propsmap
+
+	return propMap, nil
+}
+
+func (l *Loader) ParseChunkUserData(ch ChunkHeader) (Chunk, error) {
+	var flag UserDataFlag
+	if err := l.BytesToStructV2(4, &flag); err != nil {
+		return nil, err
+	}
+
+	chunk := &ChunkUserData{
+		header: ch,
+	}
+
+	if flag&UserDataHasText == UserDataHasText {
+		var textLen uint16
+		if err := l.BytesToStructV2(2, &textLen); err != nil {
+			return nil, err
+		}
+
+		text := make([]byte, textLen)
+		if err := l.BytesToStructV2(int(textLen), &text); err != nil {
+			return nil, err
+		}
+
+		chunk.Text = string(text)
+	}
+
+	if flag&UserDataHasColor == UserDataHasColor {
+		var userDataColor ChunkUserDataColor
+		if err := l.BytesToStructV2(ChunkUserDataColorSize, &userDataColor); err != nil {
+			return nil, err
+		}
+
+		chunk.Color = &userDataColor
+	}
+
+	if flag&UserDataHasProperties == UserDataHasProperties {
+		var mapHeader ChunkUserDataPropMapHeader
+		if err := l.BytesToStructV2(ChunkUserDataPropMapHeaderSize, &mapHeader); err != nil {
+			return nil, err
+		}
+
+		propMaps := make([]ChunkUserDataPropMap, mapHeader.PropMapNumbers)
+		for range mapHeader.PropMapNumbers {
+			l.ParseUserDataPropMap()
+		}
+
+		chunk.Maps = &propMaps
+	}
+
+	return chunk, nil
 }
 
 func (l *Loader) ParseChunkExternalFiles(ch ChunkHeader) (Chunk, error) {
@@ -925,22 +1292,22 @@ func (l *Loader) ParseChunkExternalFiles(ch ChunkHeader) (Chunk, error) {
 	if err := l.BytesToStructV2(ChunkExternalFilesDataSize, &externalFilesData); err != nil {
 		return nil, err
 	}
-	
+
 	entries := make([]ChunkExternalFilesEntry, externalFilesData.NumberEntries)
 	for i := 0; i < int(externalFilesData.NumberEntries); i++ {
 		var entryData ChunkExternalFilesEntryData
 		if err := l.BytesToStructV2(ChunkExternalFilesEntryDataSize, &entryData); err != nil {
 			return nil, err
 		}
-		
+
 		entryName := make([]byte, entryData.NameLength)
 		if err := l.BytesToStructV2(int(entryData.NameLength), &entryName); err != nil {
 			return nil, err
 		}
-		
+
 		entry := ChunkExternalFilesEntry{
 			ChunkExternalFilesEntryData: entryData,
-			Name: string(entryName),
+			Name:                        string(entryName),
 		}
 		entries[i] = entry
 	}
@@ -955,7 +1322,7 @@ func (l *Loader) ParseChunkCelExtra(ch ChunkHeader) (Chunk, error) {
 	}
 
 	return &ChunkCelExtra{
-		header: ch,
+		header:            ch,
 		ChunkCelExtraData: celExtraData,
 	}, nil
 }
