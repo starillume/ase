@@ -835,64 +835,42 @@ func (l *Loader) ParseHeader() (Header, error) {
 
 func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 	var chunk Chunk
-	var err error
 
-	// fmt.Printf("chunk type: %d", ch.Type)
 	switch ch.Type {
 	case ColorProfileChunkHex:
-		if chunk, err = l.ParseChunkColorProfile(ch); err != nil {
-			return nil, err
-		}
+		return l.ParseChunkColorProfile(ch)
 	case OldPaletteChunkHex:
-		if chunk, err = l.ParseChunkOldPalette(ch); err != nil {
-			return nil, err
-		}
+		return l.ParseChunkOldPalette(ch)
+	case OldPaletteChunk2Hex:
+		return l.ParseChunkOldPalette(ch)
 	case LayerChunkHex:
-		if chunk, err = l.ParseChunkLayer(ch); err != nil {
-			return nil, err
-		}
+		return l.ParseChunkLayer(ch)
 	case PaletteChunkHex:
-		if chunk, err = l.ParseChunkPalette(ch); err != nil {
-			return nil, err
-		}
+		return l.ParseChunkPalette(ch)
 	case CelExtraChunkHex:
-		if chunk, err = l.ParseChunkCelExtra(ch); err != nil {
-			return nil, err
-		}
+		return l.ParseChunkCelExtra(ch)
 	case ExternalFilesChunkHex:
-		if chunk, err = l.ParseChunkExternalFiles(ch); err != nil {
-			return nil, err
-		}
+		return l.ParseChunkExternalFiles(ch)
 	case TagsChunkHex:
-		if chunk, err = l.ParseChunkTag(ch); err != nil {
-			return nil, err
-		}
+		return l.ParseChunkTag(ch)
 	case SliceChunkHex:
-		if chunk, err = l.ParseChunkSlice(ch); err != nil {
-			return nil, err
-		}
+		return l.ParseChunkSlice(ch)
 	case TilesetChunkHex:
-		if chunk, err = l.ParseChunkTileset(ch); err != nil {
-			return nil, err
-		}
+		return l.ParseChunkTileset(ch)
 	case CelChunkHex:
-		if chunk, err = l.ParseChunkCel(ch); err != nil {
-			return nil, err
-		}
+		return l.ParseChunkCel(ch)
 	case UserDataChunkHex:
-		if chunk, err = l.ParseChunkUserData(ch); err != nil {
-			return nil, err
-		}
-
-	default:
-		// NOTE: quando definir todos os chunk types, dar erro aqui:
-		// return fmt.Errorf("Invalid chunk type: %d", ch.Type)
+		return l.ParseChunkUserData(ch)
+	case MaskChunkHex:
 		l.loadFrameChunkData(ch)
-		cfake := &ChunkColorProfile{header: ch}
-		return cfake, nil
+		return chunk, nil
+	case PathChunkHex:
+		l.loadFrameChunkData(ch)
+		return chunk, nil
+	default:
+		// unreachable
+		return nil, fmt.Errorf("Invalid chunk type: %d", ch.Type)
 	}
-
-	return chunk, nil
 }
 
 func (l *Loader) ParseChunkTileset(ch ChunkHeader) (Chunk, error) {
