@@ -453,7 +453,7 @@ type ChunkTileset struct {
 	Name  string
 	Flags ChunkTilesetFlags
 	*ChunkTilesetLinkExternalFileData
-	*ChunkTilesetTilesData
+	TilesetImage *Pixels
 }
 
 const ChunkTilesetDataSize = 34
@@ -483,11 +483,6 @@ const ChunkTilesetLinkExternalFileDataSize = 8
 type ChunkTilesetLinkExternalFileData struct {
 	ExternalFileID        uint32
 	ExternalFileTilesetID uint32
-}
-
-type ChunkTilesetTilesData struct {
-	DataLength        uint32
-	CompressedTileset []byte
 }
 
 func (c *ChunkTileset) GetHeader() ChunkHeader {
@@ -648,7 +643,9 @@ type ChunkCelCompressedTilemapStaticData struct {
 type ChunkCelCompressedTilemapData struct {
 	ChunkCelDimensionData
 	ChunkCelCompressedTilemapStaticData
-	Tiles PixelsCompressed // NOTE: não sei como fazer esse negocio, voltar depois
+	Tiles PixelsCompressed
+	// NOTE: não sei como fazer esse negocio, voltar depois
+	// NOTE: dica pro lerdinho acima: tile não é pixel !
 }
 
 const UserDataFlagSize = 4
@@ -756,7 +753,6 @@ func (l *Loader) readToBuffer() error {
 func (l *Loader) enoughSpaceToRead(size int) bool {
 	available := l.Buffer.Len()
 	needed := size
-	// fmt.Println("available: ", available, "needed: ", needed)
 	return available >= needed
 }
 
@@ -771,7 +767,6 @@ func BytesToStruct[T any](loader *Loader, size int) (T, error) {
 		return t, nil
 	}
 
-	// fmt.Println("pegar mais dados do fd")
 	err := loader.readToBuffer()
 	if err != nil {
 		return t, err
@@ -789,7 +784,6 @@ func (l *Loader) BytesToStructV2(size int, t any) error {
 		return nil
 	}
 
-	// fmt.Println("pegar mais dados do fd")
 	err := l.readToBuffer()
 	if err != nil {
 		return err
@@ -809,7 +803,6 @@ func (l *Loader) loadFrameChunkData(ch ChunkHeader) ([]byte, error) {
 		return bufchunk, nil
 	}
 
-	// fmt.Println("chunk: pegar mais dados do fd")
 	err := l.readToBuffer()
 	if err != nil {
 		return nil, err
@@ -819,7 +812,6 @@ func (l *Loader) loadFrameChunkData(ch ChunkHeader) ([]byte, error) {
 }
 
 func (l *Loader) ParseHeader() (Header, error) {
-	// fmt.Printf("Parser Header")
 	header, err := BytesToStruct[Header](l, ChunkHeaderSize)
 	if err != nil {
 		return header, err
@@ -901,7 +893,7 @@ func (l *Loader) ParseChunkTileset(ch ChunkHeader) (Chunk, error) {
 		Name:                             string(nameBytes),
 		Flags:                            flags,
 		ChunkTilesetLinkExternalFileData: nil,
-		ChunkTilesetTilesData:            nil,
+		TilesetImage:                     nil,
 	}
 
 	if chunk.Flags.LinkExternalFile {
@@ -919,15 +911,11 @@ func (l *Loader) ParseChunkTileset(ch ChunkHeader) (Chunk, error) {
 			return nil, err
 		}
 
-		data := make([]byte, dataLength)
-		if err := l.BytesToStructV2(int(dataLength), &data); err != nil {
+		tilesetImage, err := l.GetPixels(ch, true, int(dataLength))
+		if err != nil {
 			return nil, err
 		}
-
-		chunk.ChunkTilesetTilesData = &ChunkTilesetTilesData{
-			DataLength:        dataLength,
-			CompressedTileset: data,
-		}
+		chunk.TilesetImage = &tilesetImage
 	}
 
 	return &chunk, nil
@@ -1442,9 +1430,7 @@ func (l *Loader) AlocatePixels(pixels Pixels, size int) {
 	}
 }
 
-func (l *Loader) GetPixels(ch ChunkHeader, compressed bool) (Pixels, error) {
-	pixelDataSize := int(ch.Size - ChunkHeaderSize - ChunkCelDataSize - ChunkCelDimensionSize)
-
+func (l *Loader) GetPixels(ch ChunkHeader, compressed bool, pixelDataSize int) (Pixels, error) {
 	var pixels Pixels
 	if compressed {
 		pixelsCompressed := make(PixelsZlib, pixelDataSize)
@@ -1492,7 +1478,7 @@ func (l *Loader) ParseChunkCel(ch ChunkHeader) (Chunk, error) {
 	case CelTypeRawImage:
 		var pixels Pixels
 		var err error
-		if pixels, err = l.GetPixels(ch, false); err != nil {
+		if pixels, err = l.GetPixels(ch, false, int(ch.Size-ChunkHeaderSize-ChunkCelDataSize-ChunkCelDimensionSize)); err != nil {
 			return nil, err
 		}
 		return &ChunkCelImage{
@@ -1506,7 +1492,7 @@ func (l *Loader) ParseChunkCel(ch ChunkHeader) (Chunk, error) {
 	case CelTypeCompressedImage:
 		var pixels Pixels
 		var err error
-		if pixels, err = l.GetPixels(ch, true); err != nil {
+		if pixels, err = l.GetPixels(ch, true, int(ch.Size-ChunkHeaderSize-ChunkCelDataSize-ChunkCelDimensionSize)); err != nil {
 			return nil, err
 		}
 		return &ChunkCelImage{
@@ -1649,9 +1635,7 @@ func (l *Loader) ParseChunkTag(ch ChunkHeader) (Chunk, error) {
 func (l *Loader) ParseFrames(header *Header) ([]Frame, error) {
 	frames := make([]Frame, 0)
 
-	// fmt.Printf("Parser Frames, count: %d", header.Frames)
 	for i := range header.Frames {
-		// fmt.Println("frameheader to struct")
 		fh, err := BytesToStruct[FrameHeader](l, FrameHeaderSize)
 		if err != nil {
 			return nil, err
@@ -1661,18 +1645,14 @@ func (l *Loader) ParseFrames(header *Header) ([]Frame, error) {
 			return nil, err
 		}
 
-		// fmt.Println("Chunk number: ", fh.ChunkNumber)
-
 		chunkList := make([]Chunk, 0)
 		// TODO: verificar o numero antigo
 		for range fh.ChunkNumber {
-			// fmt.Println("chunkheader to struct")
 			ch, err := BytesToStruct[ChunkHeader](l, ChunkHeaderSize)
 			if err != nil {
 				return nil, err
 			}
 
-			// fmt.Println("chunkdata to struct")
 			var c Chunk
 			c, err = l.ParseChunk(ch)
 			if err != nil {

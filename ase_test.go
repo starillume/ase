@@ -139,10 +139,6 @@ func TestChunkTileset(t *testing.T) {
 	if chunkTileset.ChunkTilesetLinkExternalFileData.ExternalFileID != 42 {
 		t.Errorf("unexpected external file id: got %d, want %d", chunkTileset.ChunkTilesetLinkExternalFileData.ExternalFileID, 42)
 	}
-
-	if chunkTileset.ChunkTilesetTilesData.DataLength != 10 {
-		t.Errorf("unexpected tiles data length: got %d, want %d", chunkTileset.ChunkTilesetTilesData.DataLength, 10)
-	}
 }
 
 func TestChunkTag(t *testing.T) {
