@@ -5,6 +5,9 @@ import (
 	"compress/zlib"
 	"encoding/binary"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	"log"
 	"os"
@@ -106,12 +109,6 @@ type Chunk interface {
 	GetHeader() ChunkHeader
 	GetType() ChunkDataType
 }
-
-// type OldpalettechunkData struct {}
-//
-// type Oldpalettechunk2Data struct {}
-//
-// type LayerChunkData struct {}
 
 type ColorProfileType uint16
 
@@ -556,7 +553,7 @@ type ChunkCelData struct {
 	_          [5]byte
 }
 
-type Pixels interface{}
+type Pixels any
 
 type PixelsCompressed interface {
 	Decompress() (Pixels, error)
@@ -567,44 +564,47 @@ type PixelsGrayscale [][2]byte
 type PixelsRGBA [][4]byte
 type PixelsZlib []byte
 
-func (p *PixelsZlib) Decompress(pixels Pixels) error {
+func (p *PixelsZlib) Decompress() ([]byte, error) {
 	buffer := bytes.NewBuffer(*p)
 	r, err := zlib.NewReader(buffer)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	defer r.Close()
 
-	d := bytes.NewBuffer(pixels.([]byte))
-	_, err = io.Copy(d, r)
-	if err != nil {
-		return err
+	d := new(bytes.Buffer)
+
+	if _, err := io.Copy(d, r); err != nil {
+		return nil, err
 	}
 
-	return nil
+	return d.Bytes(), nil
 }
 
-// func (p *PixelsRGBA) ToImage(width, height int) image.Image {
-// 	rect := image.Rect(0, 0, width, height)
-// 	img := image.NewRGBA(rect)
-//
-// 	pixels := *p
-// 	for x := range int(width) {
-// 		for y := range int(height) {
-// 			i := y*int(width) + x
-// 			color := color.RGBA{
-// 				R: pixels[i][0],
-// 				G: pixels[i][1],
-// 				B: pixels[i][2],
-// 				A: pixels[i][3],
-// 			}
-// 			img.Set(x, y, color)
-// 		}
-// 	}
-//
-// 	return img
-// }
+func (p *PixelsRGBA) ToImage(celX, celY, width, height, canvasWidth, canvasHeight int, frameId int) image.Image {
+	rect := image.Rect(0, 0, canvasWidth, canvasHeight)
+	img := image.NewRGBA(rect)
+	pixels := *p
+	for y := range height {
+		for x := range width {
+			i := y*width + x
+			color := color.RGBA{
+				R: pixels[i][0],
+				G: pixels[i][1],
+				B: pixels[i][2],
+				A: pixels[i][3],
+			}
+			img.Set(x+celX, y+celY, color)
+		}
+	}
+
+	file, _ := os.Create(fmt.Sprintf("teste%d.png", frameId))
+	defer file.Close()
+	png.Encode(file, img)
+
+	return img
+}
 
 const ChunkCelDimensionSize = 4
 
@@ -822,12 +822,15 @@ func (l *Loader) ParseHeader() (Header, error) {
 		return header, err
 	}
 
+	fmt.Printf("header width: %d, height: %d\n", header.Width, header.Height)
+
 	return header, nil
 }
 
-func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
+func (l *Loader) ParseChunk(ch ChunkHeader, frameId int) (Chunk, error) {
 	var chunk Chunk
 
+	// fmt.Printf("frameId: %d chunk type: %x\n", frameId, ch.Type)
 	switch ch.Type {
 	case ColorProfileChunkHex:
 		return l.ParseChunkColorProfile(ch)
@@ -850,7 +853,7 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 	case TilesetChunkHex:
 		return l.ParseChunkTileset(ch)
 	case CelChunkHex:
-		return l.ParseChunkCel(ch)
+		return l.ParseChunkCel(ch, frameId)
 	case UserDataChunkHex:
 		return l.ParseChunkUserData(ch)
 	case MaskChunkHex:
@@ -860,8 +863,7 @@ func (l *Loader) ParseChunk(ch ChunkHeader) (Chunk, error) {
 		l.loadFrameChunkData(ch)
 		return chunk, nil
 	default:
-		// unreachable
-		return nil, fmt.Errorf("Invalid chunk type: %d", ch.Type)
+		panic("unreachable: Invalid chunk type: " + fmt.Sprint(ch.Type))
 	}
 }
 
@@ -906,15 +908,50 @@ func (l *Loader) ParseChunkTileset(ch ChunkHeader) (Chunk, error) {
 	}
 
 	if chunk.Flags.LinkTiles {
-		var dataLength uint32
-		if err := l.BytesToStructV2(4, &dataLength); err != nil {
+		var pixelDataSize uint32
+		if err := l.BytesToStructV2(4, &pixelDataSize); err != nil {
 			return nil, err
 		}
 
-		tilesetImage, err := l.GetPixels(ch, true, int(dataLength))
+		fmt.Printf("pixel data size compressed: %d\n", pixelDataSize)
+
+		pixelsCompressed := make(PixelsZlib, pixelDataSize)
+		if err := l.BytesToStructV2(int(pixelDataSize), &pixelsCompressed); err != nil {
+			return nil, err
+		}
+
+		buffer := bytes.NewBuffer(pixelsCompressed)
+		r, err := zlib.NewReader(buffer)
 		if err != nil {
 			return nil, err
 		}
+
+		defer r.Close()
+
+		d := new(bytes.Buffer)
+
+		if _, err := io.Copy(d, r); err != nil {
+			return nil, err
+		}
+
+		fmt.Printf("pixels decompressed size: %d\n", len(d.Bytes()))
+
+		bytesTo4ByteChunks := func(data []byte) [][4]byte {
+			var chunks [][4]byte
+			for i := 0; i < len(data); i += 4 {
+				var block [4]byte
+				copy(block[:], data[i:i+4])
+				chunks = append(chunks, block)
+			}
+			return chunks
+		}
+
+		t := bytesTo4ByteChunks(d.Bytes())
+
+		fmt.Printf("teste: %v\n", PixelsRGBA(t)[0])
+
+		tilesetImage := Pixels(t)
+
 		chunk.TilesetImage = &tilesetImage
 	}
 
@@ -1392,66 +1429,72 @@ func (l *Loader) ParseChunkOldPalette(ch ChunkHeader) (Chunk, error) {
 	}
 }
 
-// func (l *Loader) GenerateImage(width, height int) (image.Image, error) {
-// 	colorDepth := l.File.Header.ColorDepth
-// 	pixelsCount := (ChunkHeaderSize - (ChunkCelDataSize - 4)) / int(colorDepth)
-// 	pixels := make(PixelsRGBA, pixelsCount)
-// 	if err := l.BytesToStructV2(pixelsCount, &pixels); err != nil {
-// 		return nil, err
-// 	}
-//
-// 	img := image.NewRGBA(rect)
-//
-// 	for x := range int(width) {
-// 		for y := range int(height) {
-// 			i := y*int(width) + x
-// 			color := color.RGBA{
-// 				R: pixels[i][0],
-// 				G: pixels[i][1],
-// 				B: pixels[i][2],
-// 				A: pixels[i][3],
-// 			}
-// 			img.Set(x, y, color)
-// 		}
-// 	}
-//
-// 	return img, nil
-// }
+func BytesToPixelsRGBA(data []byte) PixelsRGBA {
+	var chunks [][4]byte
+	for i := 0; i < len(data); i += 4 {
+		var block [4]byte
+		copy(block[:], data[i:i+4])
+		chunks = append(chunks, block)
+	}
+	return chunks
+}
 
-func (l *Loader) AlocatePixels(pixels Pixels, size int) {
+func BytesToPixelsGrayscale(data []byte) PixelsGrayscale {
+	var chunks [][2]byte
+	for i := 0; i < len(data); i += 2 {
+		var block [2]byte
+		copy(block[:], data[i:i+2])
+		chunks = append(chunks, block)
+	}
+	return chunks
+}
+
+func (l *Loader) ResolvePixelType(buf []byte) Pixels {
+	var pixels Pixels
 	colorDepth := l.File.Header.ColorDepth
+
 	switch colorDepth {
 	case ColorDepthRGBA:
-		pixels = make(PixelsRGBA, size)
+		pixels = PixelsRGBA(BytesToPixelsRGBA(buf))
 	case ColorDepthGrayscale:
-		pixels = make(PixelsGrayscale, size)
+		pixels = PixelsGrayscale(BytesToPixelsGrayscale(buf))
 	case ColorDepthIndexed:
-		pixels = make(PixelsIndexed, size)
+		pixels = buf
+	default:
+		panic("unreachable: colordepth possibly not defined: " + fmt.Sprint(colorDepth))
 	}
+
+	return pixels
 }
 
 func (l *Loader) GetPixels(ch ChunkHeader, compressed bool, pixelDataSize int) (Pixels, error) {
-	var pixels Pixels
+	var pbuf []byte
 	if compressed {
+		fmt.Printf("pixel data size compressed: %d\n", pixelDataSize)
+
 		pixelsCompressed := make(PixelsZlib, pixelDataSize)
 		if err := l.BytesToStructV2(pixelDataSize, &pixelsCompressed); err != nil {
 			return nil, err
 		}
 
-		dpixels := make([]byte, 0)
-		pixelsCompressed.Decompress(dpixels)
-		pixels = dpixels
+		var err error
+		pbuf, err = pixelsCompressed.Decompress()
+		if err != nil {
+			return nil, err
+		}
 	} else {
-		l.AlocatePixels(&pixels, pixelDataSize)
-		if err := l.BytesToStructV2(pixelDataSize, &pixels); err != nil {
+		pbuf = make([]byte, pixelDataSize)
+		if err := l.BytesToStructV2(pixelDataSize, &pbuf); err != nil {
 			return nil, err
 		}
 	}
 
-	return pixels, nil
+	fmt.Printf("pixels decompressed size: %d\n", len(pbuf))
+
+	return l.ResolvePixelType(pbuf), nil
 }
 
-func (l *Loader) ParseChunkCel(ch ChunkHeader) (Chunk, error) {
+func (l *Loader) ParseChunkCel(ch ChunkHeader, frameId int) (Chunk, error) {
 	var cData ChunkCelData
 	if err := l.BytesToStructV2(ChunkCelDataSize, &cData); err != nil {
 		return nil, err
@@ -1470,15 +1513,18 @@ func (l *Loader) ParseChunkCel(ch ChunkHeader) (Chunk, error) {
 	}
 
 	var dimensions ChunkCelDimensionData
-	if err := l.BytesToStructV2(2, &dimensions); err != nil {
+	if err := l.BytesToStructV2(ChunkCelDimensionSize, &dimensions); err != nil {
 		return nil, err
 	}
 
+	fmt.Printf("width: %d, height: %d\n", dimensions.Width, dimensions.Width)
+
+	pixelDataSize := int(ch.Size - ChunkHeaderSize - ChunkCelDataSize - ChunkCelDimensionSize)
 	switch cData.CelType {
 	case CelTypeRawImage:
 		var pixels Pixels
 		var err error
-		if pixels, err = l.GetPixels(ch, false, int(ch.Size-ChunkHeaderSize-ChunkCelDataSize-ChunkCelDimensionSize)); err != nil {
+		if pixels, err = l.GetPixels(ch, false, pixelDataSize); err != nil {
 			return nil, err
 		}
 		return &ChunkCelImage{
@@ -1492,9 +1538,13 @@ func (l *Loader) ParseChunkCel(ch ChunkHeader) (Chunk, error) {
 	case CelTypeCompressedImage:
 		var pixels Pixels
 		var err error
-		if pixels, err = l.GetPixels(ch, true, int(ch.Size-ChunkHeaderSize-ChunkCelDataSize-ChunkCelDimensionSize)); err != nil {
+		if pixels, err = l.GetPixels(ch, true, pixelDataSize); err != nil {
 			return nil, err
 		}
+
+		// p := pixels.(PixelsRGBA)
+		// p.ToImage(int(cData.X), int(cData.Y), int(dimensions.Width), int(dimensions.Height), int(l.File.Header.Width), int(l.File.Header.Height), frameId)
+
 		return &ChunkCelImage{
 			header:       ch,
 			ChunkCelData: cData,
@@ -1645,6 +1695,8 @@ func (l *Loader) ParseFrames(header *Header) ([]Frame, error) {
 			return nil, err
 		}
 
+		fmt.Printf("\nframeId: %d\n", i)
+
 		chunkList := make([]Chunk, 0)
 		// TODO: verificar o numero antigo
 		for range fh.ChunkNumber {
@@ -1654,7 +1706,7 @@ func (l *Loader) ParseFrames(header *Header) ([]Frame, error) {
 			}
 
 			var c Chunk
-			c, err = l.ParseChunk(ch)
+			c, err = l.ParseChunk(ch, int(i))
 			if err != nil {
 				return nil, err
 			}
