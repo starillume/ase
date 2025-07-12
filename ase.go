@@ -1173,6 +1173,7 @@ func (l *Loader) ParseChunkCel(ch ChunkHeader) (Chunk, error) {
 			},
 		}, nil
 	case CelTypeCompressedTilemap:
+		// TODO: ver dps dado errado @Carto1a
 		var ctilemapStatic ChunkCelCompressedTilemapStaticData
 		if err := l.BytesToStructV2(ChunkCelCompressedTilemapStaticDataSize, &ctilemapStatic); err != nil {
 			return nil, err

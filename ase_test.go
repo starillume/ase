@@ -8,6 +8,67 @@ import (
 
 const testFilePath = "./test.aseprite"
 
+func TestChunkCel(t *testing.T) {
+	data := []byte{
+		0x03, 0x00,             // Layer index = 3
+		0x0A, 0x00,             // X = 10
+		0x14, 0x00,             // Y = 20
+		0xFF,                   // Opacity = 255
+		0x02, 0x00,             // Cel Type = 2 (Compressed Image)
+		0x00, 0x00,             // Z-index = 0
+
+		// Reserved (5 bytes)
+		0x00, 0x00, 0x00, 0x00, 0x00,
+
+		// Cel data for type 2
+		0x02, 0x00,             // Width = 2
+		0x02, 0x00,             // Height = 2
+		0x78, 0x9C, 0x00, 0x01, // ZLIB compressed pixel data (fictício)
+	}
+
+	chunkHeader := ChunkHeader{
+		Size: uint32(len(data)) + ChunkHeaderSize,
+		Type: CelChunkHex,
+	}
+
+	tmp, err := os.CreateTemp("", "chunk_tileset_test.aseprite")
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+
+	if _, err := tmp.Write(data); err != nil {
+		t.Fatalf("failed to write to temp file: %v", err)
+	}
+	if _, err := tmp.Seek(0, 0); err != nil {
+		t.Fatalf("failed to seek in temp file: %v", err)
+	}
+
+	loader := &Loader{Buffer: new(bytes.Buffer), Reader: tmp, Buf: make([]byte, len(data))}
+
+	chunk, err := loader.ParseChunkCel(chunkHeader)
+
+	if err != nil {
+		t.Fatalf("failed to parse ChunkCel: %v", err)
+	}
+
+	if chunk.GetType() != CelChunkHex {
+		t.Errorf("unexpected chunk type: got %d, want %d", chunk.GetType(), CelChunkHex)
+	}
+
+	chunkCel := chunk.(*ChunkCelImage)
+	
+	if chunkCel.LayerIndex != 3 {
+		t.Errorf("unexpected layer index: got %d, want %d", chunkCel.LayerIndex, 3)
+	}
+
+	if chunkCel.CelType != 2 {
+		t.Errorf("unexpected cel type: got %d, want %d", chunkCel.CelType, 2)
+	}
+
+	if chunkCel.Width != 2 || chunkCel.Height != 2 {
+		t.Errorf("unexpected width or height: got %d and %d, want %d and %d", chunkCel.Width, chunkCel.Height, 2, 2)
+	}
+}
+
 func TestChunkTileset(t *testing.T) {
 	data := []byte{
 		0x11, 0x00, 0x00, 0x00, // Tileset ID = 17
