@@ -1748,16 +1748,3 @@ func DeserializeFile(fd *os.File) (*AsepriteFile, error) {
 	return ase, nil
 }
 
-func main() {
-	path := os.Args[1]
-	fd, err := os.Open(path)
-	if err != nil {
-		log.Fatalf("error opening file: %v", err)
-	}
-	defer fd.Close()
-
-	_, err = DeserializeFile(fd)
-	if err != nil {
-		log.Fatalf("error deserializing file: %v", err)
-	}
-}
