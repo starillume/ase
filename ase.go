@@ -598,10 +598,6 @@ func (p *PixelsRGBA) ToImage(celX, celY, width, height, canvasWidth, canvasHeigh
 		}
 	}
 
-	file, _ := os.Create(fmt.Sprintf("teste%d.png", frameId))
-	defer file.Close()
-	png.Encode(file, img)
-
 	return img
 }
 
