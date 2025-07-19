@@ -2,6 +2,7 @@ package ase
 
 import (
 	"bytes"
+	"image/png"
 	"os"
 	"testing"
 )
@@ -625,6 +626,22 @@ func TestEmptyFile(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error when parsing empty file, got nil")
 	}
+}
+
+func TestSpriteSheet(t *testing.T) {
+	test, err := os.Open("test.aseprite")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer test.Close()
+
+	ase, err := DeserializeFile(test)
+	ss, err := ase.SpriteSheet()
+
+	fd, err := os.Create("aa.png")
+	defer fd.Close()
+
+	png.Encode(fd, ss)
 }
 
 func TestZeroFile(t *testing.T) {
