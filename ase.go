@@ -9,7 +9,6 @@ import (
 	"image/color"
 	"image/png"
 	"io"
-	"log"
 	"os"
 	"reflect"
 	"sync"
