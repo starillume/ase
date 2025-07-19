@@ -18,6 +18,21 @@ const (
 	ChunkSize = 128
 )
 
+//
+// type AseFile struct {
+// 	CanvasWidth
+// 	CanvasHeight
+// 	ColorDepth
+//
+// 	PixelWidth
+// 	PixelHeight
+//
+// 	[]Frame
+// 	[]Tags
+// 	[]Layers
+// }
+
+
 type AsepriteFile struct {
 	Header Header
 	Frames []Frame
@@ -1773,15 +1788,19 @@ func (a *AsepriteFile) SpriteSheet() (image.Image, error) {
 	sprites := make([]image.Image, 0)
 
 	for _, frame := range a.Frames {
+		sprite := image.NewRGBA(image.Rect(0, 0, int(a.Header.Width), int(a.Header.Height)))
+
 		for _, chunk := range frame.Chunks {
 			switch chunk.(type) {
 			case *ChunkCelImage:
 				c := chunk.(*ChunkCelImage)
 				pixels := c.ChunkCelRawImageData.Pixels.(PixelsRGBA)
 				img := pixels.ToImage(int(c.X), int(c.Y), int(c.ChunkCelDimensionData.Width), int(c.ChunkCelDimensionData.Height), int(a.Header.Width), int(a.Header.Height))
-				sprites = append(sprites, img)
+				draw.Draw(sprite, sprite.Bounds(), img, sprite.Bounds().Min, draw.Over)
 			}
 		}
+
+		sprites = append(sprites, sprite)
 	}
 
 	spriteSheet := joinImagesHorizontally(sprites)
