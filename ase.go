@@ -24,46 +24,6 @@ const (
 	ColorDepthIndexed   ColorDepth = 8
 )
 
-const HeaderSize = 128
-
-type Header struct {
-	FileSize     uint32
-	MagicNumber  uint16
-	Frames       uint16
-	Width        uint16
-	Height       uint16
-	ColorDepth   ColorDepth
-	Flags        uint32
-	FrameSpeed   uint16 // deprecated
-	_            [2]uint32
-	PaletteEntry byte
-	_            [3]byte
-	NumberColors uint16
-	PixelWidth   byte
-	PixelHeight  byte
-	GridX        int16
-	GridY        int16
-	GridWidth    uint16
-	GridHeight   uint16
-	_            [84]byte
-}
-
-type Frame struct {
-	Header FrameHeader
-	Chunks []Chunk
-}
-
-const FrameHeaderSize = 16
-
-type FrameHeader struct {
-	FrameBytes     uint32
-	MagicNumber    uint16
-	OldChunkNumber uint16 // deprecated?
-	FrameDuration  uint16
-	_              [2]byte
-	ChunkNumber    uint32
-}
-
 type ChunkDataType uint16
 
 const (
@@ -717,26 +677,10 @@ func checkMagicNumber(magic, number uint16, from string) error {
 	return nil
 }
 
-func (l *Loader) ParseHeader() (Header, error) {
-	header, err := BytesToStruct[Header](l, ChunkHeaderSize)
-	if err != nil {
-		return header, err
-	}
-
-	err = checkMagicNumber(0xA5E0, header.MagicNumber, "header")
-	if err != nil {
-		return header, err
-	}
-
-	fmt.Printf("header width: %d, height: %d\n", header.Width, header.Height)
-
-	return header, nil
-}
-
 func (l *Loader) ParseChunk(ch ChunkHeader, frameId int) (Chunk, error) {
 	var chunk Chunk
 
-	// fmt.Printf("frameId: %d chunk type: %x\n", frameId, ch.Type)
+	fmt.Printf("frameId: %d chunk type: %x\n", frameId, ch.Type)
 	switch ch.Type {
 	case ColorProfileChunkHex:
 		return l.ParseChunkColorProfile(ch)
@@ -1586,46 +1530,6 @@ func (l *Loader) ParseChunkTag(ch ChunkHeader) (Chunk, error) {
 		header:  ch,
 		Entries: entries,
 	}, nil
-}
-
-func (l *Loader) ParseFrames(header *Header) ([]Frame, error) {
-	frames := make([]Frame, 0)
-
-	for i := range header.Frames {
-		fh, err := BytesToStruct[FrameHeader](l, FrameHeaderSize)
-		if err != nil {
-			return nil, err
-		}
-		err = checkMagicNumber(0xF1FA, fh.MagicNumber, "frameheader "+fmt.Sprint(i))
-		if err != nil {
-			return nil, err
-		}
-
-		fmt.Printf("\nframeId: %d\n", i)
-
-		chunkList := make([]Chunk, 0)
-		// TODO: verificar o numero antigo
-		for range fh.ChunkNumber {
-			ch, err := BytesToStruct[ChunkHeader](l, ChunkHeaderSize)
-			if err != nil {
-				return nil, err
-			}
-
-			var c Chunk
-			c, err = l.ParseChunk(ch, int(i))
-			if err != nil {
-				return nil, err
-			}
-
-			chunkList = append(chunkList, c)
-		}
-
-		frames = append(frames, Frame{Header: fh, Chunks: chunkList})
-		// NOTE: depois de ler dar um reset no buffer? Vê se tem um resto guardar e depois
-		// coloca no buffer de novo
-	}
-
-	return frames, nil
 }
 
 func DeserializeFile(fd *os.File) (*AsepriteFile, error) {
