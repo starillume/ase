@@ -832,15 +832,12 @@ func (l *Loader) ParseHeader() (Header, error) {
 		return header, err
 	}
 
-	fmt.Printf("header width: %d, height: %d\n", header.Width, header.Height)
-
 	return header, nil
 }
 
 func (l *Loader) ParseChunk(ch ChunkHeader, frameId int) (Chunk, error) {
 	var chunk Chunk
 
-	// fmt.Printf("frameId: %d chunk type: %x\n", frameId, ch.Type)
 	switch ch.Type {
 	case ColorProfileChunkHex:
 		return l.ParseChunkColorProfile(ch)
@@ -923,8 +920,6 @@ func (l *Loader) ParseChunkTileset(ch ChunkHeader) (Chunk, error) {
 			return nil, err
 		}
 
-		fmt.Printf("pixel data size compressed: %d\n", pixelDataSize)
-
 		pixelsCompressed := make(PixelsZlib, pixelDataSize)
 		if err := l.BytesToStructV2(int(pixelDataSize), &pixelsCompressed); err != nil {
 			return nil, err
@@ -944,8 +939,6 @@ func (l *Loader) ParseChunkTileset(ch ChunkHeader) (Chunk, error) {
 			return nil, err
 		}
 
-		fmt.Printf("pixels decompressed size: %d\n", len(d.Bytes()))
-
 		bytesTo4ByteChunks := func(data []byte) [][4]byte {
 			var chunks [][4]byte
 			for i := 0; i < len(data); i += 4 {
@@ -957,8 +950,6 @@ func (l *Loader) ParseChunkTileset(ch ChunkHeader) (Chunk, error) {
 		}
 
 		t := bytesTo4ByteChunks(d.Bytes())
-
-		fmt.Printf("teste: %v\n", PixelsRGBA(t)[0])
 
 		tilesetImage := Pixels(t)
 
@@ -1480,8 +1471,6 @@ func (l *Loader) ResolvePixelType(buf []byte) Pixels {
 func (l *Loader) GetPixels(ch ChunkHeader, compressed bool, pixelDataSize int) (Pixels, error) {
 	var pbuf []byte
 	if compressed {
-		fmt.Printf("pixel data size compressed: %d\n", pixelDataSize)
-
 		pixelsCompressed := make(PixelsZlib, pixelDataSize)
 		if err := l.BytesToStructV2(pixelDataSize, &pixelsCompressed); err != nil {
 			return nil, err
@@ -1498,8 +1487,6 @@ func (l *Loader) GetPixels(ch ChunkHeader, compressed bool, pixelDataSize int) (
 			return nil, err
 		}
 	}
-
-	fmt.Printf("pixels decompressed size: %d\n", len(pbuf))
 
 	return l.ResolvePixelType(pbuf), nil
 }
@@ -1526,8 +1513,6 @@ func (l *Loader) ParseChunkCel(ch ChunkHeader, frameId int) (Chunk, error) {
 	if err := l.BytesToStructV2(ChunkCelDimensionSize, &dimensions); err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("width: %d, height: %d\n", dimensions.Width, dimensions.Width)
 
 	pixelDataSize := int(ch.Size - ChunkHeaderSize - ChunkCelDataSize - ChunkCelDimensionSize)
 	switch cData.CelType {
@@ -1704,8 +1689,6 @@ func (l *Loader) ParseFrames(header *Header) ([]Frame, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		fmt.Printf("\nframeId: %d\n", i)
 
 		chunkList := make([]Chunk, 0)
 		// TODO: verificar o numero antigo
