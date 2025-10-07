@@ -32,7 +32,7 @@ type Frame struct {
 	Cels     []*Cel
 }
 
-type Cel struct{
+type Cel struct {
 	Layer *Layer
 	Frame *Frame
 }
@@ -52,24 +52,35 @@ type Layer struct {
 	Cels []*Cel
 }
 
-type GroupLayers struct{
+type GroupLayers struct {
 	Layers []*Layer
 }
 
 func DeserializeFile(fd *os.File) (*AsepriteFile, error) {
 	loader := NewLoader(fd)
 
-	if err := loader.ParseHeader(); err != nil {
+	var headerBytes = make([]byte, HeaderSize)
+
+	err := loader.BytesToStructV2(HeaderSize, headerBytes)
+	if err != nil {
 		return nil, err
 	}
+
+	header, err := ParseHeader(headerBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	loader.Ase.Header = *header
+
 	if err := loader.ParseFrames(); err != nil {
 		return nil, err
 	}
 
 	fmt.Printf("ase: %+v\n", loader.Ase)
 	fmt.Printf("tags: %+v\n", loader.Ase.Tags)
-	fmt.Printf("tag: %+v\n", loader.Ase.Tags[0])
-	fmt.Printf("frame: %+v\n", loader.Ase.Frames[0])
+	// fmt.Printf("tag: %+v\n", loader.Ase.Tags[0])
+	// fmt.Printf("frame: %+v\n", loader.Ase.Frames[0])
 
 	return loader.Ase, nil
 }

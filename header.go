@@ -1,6 +1,8 @@
 package ase
 
 import (
+	"bytes"
+
 	"github.com/starillume/ase/common"
 	"github.com/starillume/ase/pixel"
 )
@@ -29,18 +31,18 @@ type Header struct {
 	_            [84]byte
 }
 
-func (l *Loader) ParseHeader() error {
-	header, err := BytesToStruct[Header](l, HeaderSize)
-	if err != nil {
-		return err
+func ParseHeader(data []byte) (*Header, error) {
+	reader := bytes.NewReader(data)
+
+	var header Header;
+	err := common.BytesToStruct2(reader, &header); if err != nil {
+		return nil, err
 	}
 
 	err = common.CheckMagicNumber(0xA5E0, header.MagicNumber, "header")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	l.Ase.Header = header
-
-	return nil
+	return &header, nil
 }
