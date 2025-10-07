@@ -6,7 +6,7 @@ import (
 	"github.com/starillume/ase/common"
 )
 
-type ChunkExternalFiles struct {
+type ExternalFiles struct {
 	ChunkExternalFilesData
 	Entries []ChunkExternalFilesEntry
 }
@@ -59,5 +59,5 @@ func ParseChunkExternalFiles(data []byte) (Chunk, error) {
 		entries[i] = entry
 	}
 
-	return &ChunkExternalFiles{ChunkExternalFilesData: externalFilesData, Entries: entries}, nil
+	return &ExternalFiles{ChunkExternalFilesData: externalFilesData, Entries: entries}, nil
 }

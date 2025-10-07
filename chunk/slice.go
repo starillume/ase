@@ -6,7 +6,7 @@ import (
 	"github.com/starillume/ase/common"
 )
 
-type ChunkSlice struct {
+type Slice struct {
 	ChunkSliceData
 	Name string
 	Keys []ChunkSliceKey
@@ -96,7 +96,7 @@ func ParseChunkSlice(data []byte) (Chunk, error) {
 		sliceKeys[i] = sliceKey
 	}
 
-	return &ChunkSlice{
+	return &Slice{
 		ChunkSliceData: chunkSliceData,
 		Name:           string(chunkSliceName),
 		Keys:           sliceKeys,

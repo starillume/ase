@@ -13,11 +13,62 @@ const (
 	ChunkSize = 128
 )
 
+type rawAseprite struct {
+	Header        Header
+	Palette       *palette
+	Frames        []*frame
+	Tags          []*tag
+	Layers        []*layer
+	Slices        []*slice
+	ColorProfile  *colorProfile
+	ExternalFiles []*externalFiles
+}
+
+type slice struct {
+	Chunk    *chunk.Slice
+	UserData *chunk.UserData
+}
+
+type palette struct {
+	Chunk    *chunk.Chunk
+	UserData *chunk.UserData
+}
+
+type frame struct {
+	Cels []*cel
+}
+
+type cel struct {
+	Chunk    *chunk.Chunk
+	Extra    *chunk.CelExtra
+	UserData *chunk.UserData
+}
+
+type tag struct {
+	Chunk    *chunk.Tag
+	UserData *chunk.UserData
+}
+
+type layer struct {
+	Chunk    *chunk.Layer
+	UserData *chunk.UserData
+}
+
+type colorProfile struct {
+	Chunk    *chunk.Chunk
+	UserData *chunk.UserData
+}
+
+type externalFiles struct {
+	Chunk    *chunk.ExternalFiles
+	UserData *chunk.UserData
+}
+
 type Loader struct {
 	Reader io.Reader
 	Buf    []byte
 	Buffer *bytes.Buffer
-	Ase   *AsepriteFile
+	Ase    *AsepriteFile
 }
 
 func (l *Loader) readToBuffer() error {
@@ -98,8 +149,8 @@ func (l *Loader) loadFrameChunkData(ch chunk.Header) ([]byte, error) {
 func NewLoader(fd *os.File) *Loader {
 	return &Loader{
 		Reader: fd,
-		Buf: make([]byte, ChunkSize),
+		Buf:    make([]byte, ChunkSize),
 		Buffer: new(bytes.Buffer),
-		Ase: new(AsepriteFile),
+		Ase:    new(AsepriteFile),
 	}
 }
