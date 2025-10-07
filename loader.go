@@ -68,7 +68,7 @@ type Loader struct {
 	Reader io.Reader
 	Buf    []byte
 	Buffer *bytes.Buffer
-	Ase    *AsepriteFile
+	Ase    *rawAseprite
 }
 
 func (l *Loader) readToBuffer() error {
@@ -151,6 +151,6 @@ func NewLoader(fd *os.File) *Loader {
 		Reader: fd,
 		Buf:    make([]byte, ChunkSize),
 		Buffer: new(bytes.Buffer),
-		Ase:    new(AsepriteFile),
+		Ase:    new(rawAseprite),
 	}
 }

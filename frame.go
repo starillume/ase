@@ -1,8 +1,8 @@
 package ase
 
 import (
+	"bytes"
 	"fmt"
-	"image/color"
 
 	"github.com/starillume/ase/chunk"
 	"github.com/starillume/ase/common"
@@ -14,6 +14,7 @@ type FrameData struct {
 }
 
 const FrameHeaderSize = 16
+const FrameMagicNumber = 0xF1FA
 
 type FrameHeader struct {
 	FrameBytes     uint32
@@ -24,31 +25,7 @@ type FrameHeader struct {
 	ChunkNumber    uint32
 }
 
-func resolveChunkTag(c *chunk.Tag, frames []*Frame) []*Tag {
-	tags := make([]*Tag, 0, len(c.Entries))
-
-	for _, chunkTag := range c.Entries {
-		from := int(chunkTag.FromFrame)
-		to := int(chunkTag.ToFrame)
-		tagColor := color.RGBA{R: chunkTag.Color[0], B: chunkTag.Color[1], G: chunkTag.Color[2], A: 1}
-
-		tag := &Tag{
-			Name:              chunkTag.Name,
-			From:              from,
-			To:                to,
-			Frames:            frames[from:to],
-			LoopAnimationType: chunkTag.LoopAnimationType,
-			Repeat:            int(chunkTag.Repeat),
-			Color:             tagColor,
-		}
-
-		tags = append(tags, tag)
-	}
-
-	return tags
-}
-
-func resolveUserDataTags(c *chunk.UserData, tags []*Tag) {
+func resolveUserDataTags(c *chunk.UserData, tags []*tag) {
 	for _, tag := range tags {
 		if tag.UserData == nil {
 			tag.UserData = c
@@ -58,72 +35,113 @@ func resolveUserDataTags(c *chunk.UserData, tags []*Tag) {
 	}
 }
 
-func resolveChunkUserData(c *chunk.UserData, asefile *AsepriteFile, lastChunkType chunk.ChunkDataType) chunk.ChunkDataType {
-	fmt.Printf("userdata last type: %x\n", lastChunkType)
-	switch lastChunkType {
-	case chunk.TagsChunkHex:
-		fmt.Printf("userdata: %+v\n", c)
-		tags := asefile.Tags
+func parseFrame(fh FrameHeader, data []byte) (*frame, error) {
+	reader := bytes.NewReader(data)
 
-		resolveUserDataTags(c, tags)
-		return chunk.TagsChunkHex
+	frame := &frame{
+		Cels: make([]*cel, 0),
 	}
 
-	return chunk.UserDataChunkHex
-}
-
-func (l *Loader) ParseFirstFrame(header *Header) error {
-	index := 0
-	fh, err := BytesToStruct[FrameHeader](l, FrameHeaderSize)
-	if err != nil {
-		return err
-	}
-	if err = common.CheckMagicNumber(0xF1FA, fh.MagicNumber, "frameheader "+fmt.Sprint(index)); err != nil {
-		return err
+	chunkCount := 0
+	if fh.ChunkNumber != 0 {
+		chunkCount = int(fh.ChunkNumber)
+	} else {
+		chunkCount = int(fh.OldChunkNumber)
 	}
 
-	chunkList := make([]chunk.Chunk, 0)
-	frame := l.Ase.Frames[0]
-	frame.Duration = int(fh.FrameDuration)
+	fmt.Printf("chunk count, %d\n", chunkCount)
 
-	var lastChunkType chunk.ChunkDataType = 0
-
-	// TODO: verificar o numero antigo
-	for range fh.ChunkNumber {
-		ch, err := BytesToStruct[chunk.Header](l, chunk.HeaderSize)
+	for range chunkCount {
+		ch, err := common.BytesToStruct[chunk.Header](reader)
 		if err != nil {
-			return err
-		}
-
-		data, err := l.loadFrameChunkData(ch)
-		if err != nil {
-			return err
-		}
-
-		c, err := chunk.Parse(ch.Type, data)
-		if err != nil {
-			return err
+			return nil, err
 		}
 
 		fmt.Printf("type chunk: %x\n", ch.Type)
+		chunkData := make([]byte, ch.Size-chunk.HeaderSize)
+
+		fmt.Printf("ch, %+v\n", ch)
+
+		if err := common.BytesToStruct2(reader, chunkData); err != nil {
+			return nil, err
+		}
+
+		c, err := chunk.Parse(ch.Type, chunkData)
+		if err != nil {
+			return nil, err
+		}
+
+		if ch.Type == chunk.UserDataChunkHex {
+			fmt.Printf("userdata: %+v\n", c)
+		}
+	}
+
+	return frame, nil
+}
+
+func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, *colorProfile, error) {
+	reader := bytes.NewReader(data)
+
+	frame := &frame{
+		Cels: make([]*cel, 0),
+	}
+
+	layers := make([]*layer, 0)
+	tags := make([]*tag, 0)
+	colorProfile := &colorProfile{}
+
+	chunkCount := 0
+	if fh.ChunkNumber != 0 {
+		chunkCount = int(fh.ChunkNumber)
+	} else {
+		chunkCount = int(fh.OldChunkNumber)
+	}
+
+	fmt.Printf("chunk count, %d\n", chunkCount)
+
+	var lastChunkType chunk.ChunkDataType
+
+	for range chunkCount {
+		ch, err := common.BytesToStruct[chunk.Header](reader)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		fmt.Printf("type chunk: %x\n", ch.Type)
+		chunkData := make([]byte, ch.Size-chunk.HeaderSize)
+
+		fmt.Printf("ch, %+v\n", ch)
+
+		if err := common.BytesToStruct2(reader, chunkData); err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		c, err := chunk.Parse(ch.Type, chunkData)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
 
 		switch ch.Type {
+		case chunk.ColorProfileChunkHex:
+			colorProfile.Chunk = &c
+			lastChunkType = ch.Type
 		// case chunk.OldPaletteChunkHex:
 		// case chunk.OldPaletteChunk2Hex:
 		// case chunk.LayerChunkHex:
 		// case chunk.CelChunkHex:
 		// case chunk.CelExtraChunkHex:
-		// case chunk.ColorProfileChunkHex:
 		// case chunk.ExternalFilesChunkHex:
 		// case chunk.MaskChunkHex:
 		// case chunk.PathChunkHex:
 		case chunk.TagsChunkHex:
-			chunkTags, ok := c.(*chunk.Tag)
+			chunkTag, ok := c.(*chunk.Tag)
 			if !ok {
 				panic("chunk tag cant cast")
 			}
-
-			l.Ase.Tags = resolveChunkTag(chunkTags, l.Ase.Frames)
+			t := &tag{
+				Chunk: chunkTag,
+			}
+			tags = append(tags, t)
 			lastChunkType = ch.Type
 		// case chunk.PaletteChunkHex:
 		case chunk.UserDataChunkHex:
@@ -132,82 +150,62 @@ func (l *Loader) ParseFirstFrame(header *Header) error {
 				panic("chunk userdata cant cast")
 			}
 
-			lastChunkType = resolveChunkUserData(chunkUserData, l.Ase, lastChunkType)
-		// case chunk.SliceChunkHex:
-		// case chunk.TilesetChunkHex:
+			switch lastChunkType {
+			case chunk.TagsChunkHex:
+				fmt.Printf("userdata: %+v\n", chunkUserData)
+				resolveUserDataTags(chunkUserData, tags)
+			default:
+				lastChunkType = chunk.UserDataChunkHex
+			}
+		// // case chunk.SliceChunkHex:
+		// // case chunk.TilesetChunkHex:
 		default:
 			lastChunkType = ch.Type
 		}
-
-		chunkList = append(chunkList, c)
 	}
 
-	return nil
-}
-
-func (l *Loader) ParseFrame(header *Header, index int) (*FrameData, error) {
-	fh, err := BytesToStruct[FrameHeader](l, FrameHeaderSize)
-	if err != nil {
-		return nil, err
-	}
-	if err = common.CheckMagicNumber(0xF1FA, fh.MagicNumber, "frameheader "+fmt.Sprint(index)); err != nil {
-		return nil, err
-	}
-
-	chunkList := make([]chunk.Chunk, 0)
-	frame := &FrameData{Header: fh, Chunks: chunkList}
-
-	// TODO: verificar o numero antigo
-	for range fh.ChunkNumber {
-		ch, err := BytesToStruct[chunk.Header](l, chunk.HeaderSize)
-		if err != nil {
-			return nil, err
-		}
-
-		data, err := l.loadFrameChunkData(ch)
-		if err != nil {
-			return nil, err
-		}
-
-		c, err := chunk.Parse(ch.Type, data)
-		if err != nil {
-			return nil, err
-		}
-
-		chunkList = append(chunkList, c)
-	}
-
-	return frame, nil
+	return frame, layers, tags, colorProfile, nil
 }
 
 func (l *Loader) ParseFrames() error {
-	header := l.Ase.Header
-	frames := make([]*Frame, header.Frames)
-	for i := range frames {
-		frames[i] = new(Frame)
-	}
-	fmt.Printf("frames a: %+v\n", frames)
-	l.Ase.Frames = frames
-
-	if err := l.ParseFirstFrame(&header); err != nil {
+	fh, err := BytesToStruct[FrameHeader](l, FrameHeaderSize)
+	if err != nil {
 		return err
 	}
+	if err = common.CheckMagicNumber(FrameMagicNumber, fh.MagicNumber, "frameheader "+fmt.Sprint(1)); err != nil {
+		return err
+	}
+
+	chunksSize := int(fh.FrameBytes) - FrameHeaderSize
+	chunksBytes := make([]byte, chunksSize)
+	if err := l.BytesToStructV2(chunksSize, chunksBytes); err != nil {
+		return err
+	}
+
+	fmt.Printf("\nframeId: 0\n")
+	parseFirstFrame(fh, chunksBytes)
+
+	header := l.Ase.Header
 
 	for i := range header.Frames - 1 {
 		index := i + 1
 		fmt.Printf("\nframeId: %d\n", index)
 
-		data, err := l.ParseFrame(&header, int(index))
+		fh, err := BytesToStruct[FrameHeader](l, FrameHeaderSize)
 		if err != nil {
 			return err
 		}
-
-		frame := &Frame{
-			Duration: int(data.Header.FrameDuration),
-			// Cels: data.,
+		if err = common.CheckMagicNumber(FrameMagicNumber, fh.MagicNumber, "frameheader "+fmt.Sprint(1)); err != nil {
+			return err
 		}
 
-		frames[index] = frame
+		chunksSize := int(fh.FrameBytes) - FrameHeaderSize
+		chunksBytes := make([]byte, chunksSize)
+		if err := l.BytesToStructV2(chunksSize, chunksBytes); err != nil {
+			return err
+		}
+
+		parseFrame(fh, chunksBytes)
 	}
 
 	return nil

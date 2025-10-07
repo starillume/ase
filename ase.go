@@ -47,7 +47,6 @@ type Tag struct {
 	Color             color.Color
 	UserData          any
 }
-
 type Layer struct {
 	Cels []*Cel
 }
@@ -78,11 +77,11 @@ func DeserializeFile(fd *os.File) (*AsepriteFile, error) {
 	}
 
 	fmt.Printf("ase: %+v\n", loader.Ase)
-	fmt.Printf("tags: %+v\n", loader.Ase.Tags)
+	// fmt.Printf("tags: %+v\n", loader.Ase.Tags)
 	// fmt.Printf("tag: %+v\n", loader.Ase.Tags[0])
 	// fmt.Printf("frame: %+v\n", loader.Ase.Frames[0])
 
-	return loader.Ase, nil
+	return nil, nil
 }
 
 // func (a *AsepriteFile) SpriteSheet() (image.Image, error) {
