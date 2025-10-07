@@ -1,5 +1,10 @@
 package ase
 
+import (
+	"github.com/starillume/ase/common"
+	"github.com/starillume/ase/pixel"
+)
+
 const HeaderSize = 128
 
 type Header struct {
@@ -8,7 +13,7 @@ type Header struct {
 	Frames       uint16
 	Width        uint16
 	Height       uint16
-	ColorDepth   ColorDepth
+	ColorDepth   pixel.ColorDepth
 	Flags        uint32
 	FrameSpeed   uint16 // deprecated
 	_            [2]uint32
@@ -24,16 +29,18 @@ type Header struct {
 	_            [84]byte
 }
 
-func (l *Loader) ParseHeader() (Header, error) {
-	header, err := BytesToStruct[Header](l, ChunkHeaderSize)
+func (l *Loader) ParseHeader() error {
+	header, err := BytesToStruct[Header](l, HeaderSize)
 	if err != nil {
-		return header, err
+		return err
 	}
 
-	err = checkMagicNumber(0xA5E0, header.MagicNumber, "header")
+	err = common.CheckMagicNumber(0xA5E0, header.MagicNumber, "header")
 	if err != nil {
-		return header, err
+		return err
 	}
 
-	return header, nil
+	l.Ase.Header = header
+
+	return nil
 }

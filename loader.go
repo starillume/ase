@@ -4,13 +4,20 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"os"
+
+	"github.com/starillume/ase/chunk"
+)
+
+const (
+	ChunkSize = 128
 )
 
 type Loader struct {
 	Reader io.Reader
 	Buf    []byte
 	Buffer *bytes.Buffer
-	File   *AsepriteFile
+	Ase   *AsepriteFile
 }
 
 func (l *Loader) readToBuffer() error {
@@ -69,8 +76,8 @@ func (l *Loader) BytesToStructV2(size int, t any) error {
 	return l.BytesToStructV2(size, t)
 }
 
-func (l *Loader) loadFrameChunkData(ch ChunkHeader) ([]byte, error) {
-	size := ch.Size - ChunkHeaderSize
+func (l *Loader) loadFrameChunkData(ch chunk.Header) ([]byte, error) {
+	size := ch.Size - chunk.HeaderSize
 	if l.enoughSpaceToRead(int(size)) {
 		bufchunk := make([]byte, size)
 		_, err := io.ReadFull(l.Buffer, bufchunk)
@@ -86,4 +93,13 @@ func (l *Loader) loadFrameChunkData(ch ChunkHeader) ([]byte, error) {
 	}
 
 	return l.loadFrameChunkData(ch)
+}
+
+func NewLoader(fd *os.File) *Loader {
+	return &Loader{
+		Reader: fd,
+		Buf: make([]byte, ChunkSize),
+		Buffer: new(bytes.Buffer),
+		Ase: new(AsepriteFile),
+	}
 }
