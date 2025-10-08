@@ -71,6 +71,50 @@ func parseFrame(fh FrameHeader, data []byte) (*frame, error) {
 			return nil, err
 		}
 
+		var lastChunkType chunk.ChunkDataType
+
+		switch ch.Type {
+		case chunk.CelChunkHex:
+			cel := &cel{
+				Chunk: &c,
+			}
+
+			frame.Cels = append(frame.Cels, cel)
+			lastChunkType = ch.Type
+		case chunk.CelExtraChunkHex:
+			celExtra, ok := c.(*chunk.CelExtra)
+			if !ok {
+				panic("chunk celextra couldn't cast")
+			}
+
+			if lastChunkType != chunk.CelChunkHex {
+				panic("so deus sabe irmao")
+			}
+			
+			lastCel := frame.Cels[len(frame.Cels)]
+			lastCel.Extra = celExtra
+			frame.Cels[len(frame.Cels)] = lastCel
+			lastChunkType = ch.Type
+
+		case chunk.UserDataChunkHex:
+			chunkUserData, ok := c.(*chunk.UserData)
+			if !ok {
+				panic("chunk userdata couldn't cast")
+			}
+
+			switch lastChunkType {
+			case chunk.CelChunkHex, chunk.CelExtraChunkHex:
+				lastCel := frame.Cels[len(frame.Cels)]
+				lastCel.UserData = chunkUserData
+				frame.Cels[len(frame.Cels)] = lastCel
+				lastChunkType = chunk.UserDataChunkHex
+			default:
+				lastChunkType = chunk.UserDataChunkHex
+			}
+		default:
+			lastChunkType = ch.Type
+		}
+
 		if ch.Type == chunk.UserDataChunkHex {
 			fmt.Printf("userdata: %+v\n", c)
 		}
@@ -79,7 +123,7 @@ func parseFrame(fh FrameHeader, data []byte) (*frame, error) {
 	return frame, nil
 }
 
-func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, *colorProfile, error) {
+func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, []*slice, *externalFiles, *colorProfile, *palette, error) {
 	reader := bytes.NewReader(data)
 
 	frame := &frame{
@@ -88,7 +132,10 @@ func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, *co
 
 	layers := make([]*layer, 0)
 	tags := make([]*tag, 0)
+	slices := make([]*slice, 0)
+	externalFiles := &externalFiles{}
 	colorProfile := &colorProfile{}
+	palette := &palette{}
 
 	chunkCount := 0
 	if fh.ChunkNumber != 0 {
@@ -104,7 +151,7 @@ func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, *co
 	for range chunkCount {
 		ch, err := common.BytesToStruct[chunk.Header](reader)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, nil, err
 		}
 
 		fmt.Printf("type chunk: %x\n", ch.Type)
@@ -113,58 +160,120 @@ func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, *co
 		fmt.Printf("ch, %+v\n", ch)
 
 		if err := common.BytesToStruct2(reader, chunkData); err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, nil, err
 		}
 
 		c, err := chunk.Parse(ch.Type, chunkData)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, nil, nil, err
 		}
 
 		switch ch.Type {
 		case chunk.ColorProfileChunkHex:
 			colorProfile.Chunk = &c
 			lastChunkType = ch.Type
-		// case chunk.OldPaletteChunkHex:
-		// case chunk.OldPaletteChunk2Hex:
-		// case chunk.LayerChunkHex:
-		// case chunk.CelChunkHex:
-		// case chunk.CelExtraChunkHex:
-		// case chunk.ExternalFilesChunkHex:
-		// case chunk.MaskChunkHex:
-		// case chunk.PathChunkHex:
+		case chunk.LayerChunkHex:
+			layerChunk, ok := c.(*chunk.Layer)
+			if !ok {
+				panic("chunk layer couldn't cast")
+			}
+			
+			layer := &layer{
+				Chunk: layerChunk,
+			}
+
+			layers = append(layers, layer)
+			lastChunkType = ch.Type
+		case chunk.CelChunkHex:
+			cel := &cel{
+				Chunk: &c,
+			}
+
+			frame.Cels = append(frame.Cels, cel)
+			lastChunkType = ch.Type
+		case chunk.CelExtraChunkHex:
+			celExtra, ok := c.(*chunk.CelExtra)
+			if !ok {
+				panic("chunk celextra couldn't cast")
+			}
+
+			if lastChunkType != chunk.CelChunkHex {
+				panic("so deus sabe irmao")
+			}
+			
+			lastCel := frame.Cels[len(frame.Cels)]
+			lastCel.Extra = celExtra
+			frame.Cels[len(frame.Cels)] = lastCel
+			lastChunkType = ch.Type
+
+		case chunk.ExternalFilesChunkHex:
+			externalFilesChunk, ok := c.(*chunk.ExternalFiles)
+			if !ok {
+				panic("chunk externalfiles couldn't cast")
+			}
+
+			externalFiles.Chunk = externalFilesChunk
+			lastChunkType = ch.Type
 		case chunk.TagsChunkHex:
 			chunkTag, ok := c.(*chunk.Tag)
 			if !ok {
-				panic("chunk tag cant cast")
+				panic("chunk tag couldn't cast")
 			}
 			t := &tag{
 				Chunk: chunkTag,
 			}
 			tags = append(tags, t)
 			lastChunkType = ch.Type
-		// case chunk.PaletteChunkHex:
+		case chunk.OldPaletteChunkHex, chunk.OldPaletteChunk2Hex, chunk.PaletteChunkHex:
+			palette.Chunk = &c
+			lastChunkType = ch.Type
 		case chunk.UserDataChunkHex:
 			chunkUserData, ok := c.(*chunk.UserData)
 			if !ok {
-				panic("chunk userdata cant cast")
+				panic("chunk userdata couldn't cast")
 			}
 
 			switch lastChunkType {
 			case chunk.TagsChunkHex:
 				fmt.Printf("userdata: %+v\n", chunkUserData)
 				resolveUserDataTags(chunkUserData, tags)
+			case chunk.ColorProfileChunkHex:
+				colorProfile.UserData = chunkUserData
+				lastChunkType = chunk.UserDataChunkHex
+			case chunk.LayerChunkHex:
+				lastLayer := layers[len(layers)]
+				lastLayer.UserData = chunkUserData
+				layers[len(layers)] = lastLayer
+				lastChunkType = chunk.UserDataChunkHex
+			case chunk.CelChunkHex, chunk.CelExtraChunkHex:
+				lastCel := frame.Cels[len(frame.Cels)]
+				lastCel.UserData = chunkUserData
+				frame.Cels[len(frame.Cels)] = lastCel
+				lastChunkType = chunk.UserDataChunkHex
+			case chunk.OldPaletteChunkHex, chunk.OldPaletteChunk2Hex, chunk.PaletteChunkHex:
+				palette.UserData = chunkUserData 
+				lastChunkType = chunk.UserDataChunkHex
 			default:
 				lastChunkType = chunk.UserDataChunkHex
 			}
-		// // case chunk.SliceChunkHex:
-		// // case chunk.TilesetChunkHex:
+		case chunk.SliceChunkHex:
+			sliceChunk := c.(*chunk.Slice)
+			s := &slice{
+				Chunk: sliceChunk,
+			}
+
+			slices = append(slices, s)
+			lastChunkType = ch.Type
+
+		// case chunk.TilesetChunkHex: mo trampo kk
+		// case chunk.MaskChunkHex: deprecated
+		// case chunk.PathChunkHex: unused
 		default:
 			lastChunkType = ch.Type
 		}
 	}
 
-	return frame, layers, tags, colorProfile, nil
+	return frame, layers, tags, slices, externalFiles, colorProfile, palette, nil
 }
 
 func (l *Loader) ParseFrames() error {
@@ -183,10 +292,20 @@ func (l *Loader) ParseFrames() error {
 	}
 
 	fmt.Printf("\nframeId: 0\n")
-	parseFirstFrame(fh, chunksBytes)
+	frame, layers, tags, slices, externalFiles, colorProfile, palette, err := parseFirstFrame(fh, chunksBytes)
+	if err != nil {
+		return err
+	}
+
+	l.Ase.Frames = append(l.Ase.Frames, frame)
+	l.Ase.Layers = layers
+	l.Ase.Tags = tags
+	l.Ase.Slices = slices
+	l.Ase.ExternalFiles = externalFiles
+	l.Ase.ColorProfile = colorProfile
+	l.Ase.Palette = palette
 
 	header := l.Ase.Header
-
 	for i := range header.Frames - 1 {
 		index := i + 1
 		fmt.Printf("\nframeId: %d\n", index)
@@ -205,7 +324,12 @@ func (l *Loader) ParseFrames() error {
 			return err
 		}
 
-		parseFrame(fh, chunksBytes)
+		frame, err := parseFrame(fh, chunksBytes)
+		if err != nil {
+			return err
+		}
+
+		l.Ase.Frames = append(l.Ase.Frames, frame)
 	}
 
 	return nil

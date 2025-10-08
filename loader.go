@@ -21,7 +21,7 @@ type rawAseprite struct {
 	Layers        []*layer
 	Slices        []*slice
 	ColorProfile  *colorProfile
-	ExternalFiles []*externalFiles
+	ExternalFiles *externalFiles
 }
 
 type slice struct {
