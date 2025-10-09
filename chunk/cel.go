@@ -2,7 +2,6 @@ package chunk
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 
 	"github.com/starillume/ase/common"
@@ -135,8 +134,6 @@ func ParseChunkCel(data []byte) (Chunk, error) {
 	if err := common.BytesToStruct2(reader, &dimensions); err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("width: %d, height: %d\n", dimensions.Width, dimensions.Width)
 
 	// pixelDataSize := int(ch.Size - ChunkHeaderSize - ChunkCelDataSize - ChunkCelDimensionSize)
 	switch cData.CelType {

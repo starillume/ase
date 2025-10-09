@@ -1,7 +1,6 @@
 package ase
 
 import (
-	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -67,7 +66,6 @@ func createFrames(rawFrames []*frame, rawHeader Header) ([]*Frame, []image.Image
 	frames := make([]*Frame, 0)
 	frameImages := make([]image.Image, len(rawFrames))
 	for i, rawFrame := range rawFrames {
-		fmt.Printf("frame: %+v\n", rawFrame)
 		cels := make([]*Cel, 0)
 		for _, cel := range rawFrame.Cels {
 			newCel, _ := createCel(cel, i, int(rawHeader.Width), int(rawHeader.Height), rawHeader.ColorDepth)
@@ -128,8 +126,6 @@ func createCel(cel *cel, frameIndex int, canvasWidth int, canvasHeight int, colo
 		default:
 			return &Cel{}, nil
 	}
-
-	fmt.Printf("cel frame index %d", frameIndex)
 
 	return &Cel{
 		LayerIndex: layerIndex,
@@ -263,9 +259,6 @@ func createLayers(rawLayers []*layer, frames []*Frame) ([]*Layer, []*LayerGroup)
 }
 func createAseprite(raw *rawAseprite) (*Aseprite, error) {
 	frames, frameImages := createFrames(raw.Frames, raw.Header)
-	for _, frame := range frames {
-		fmt.Printf("frame 2: %+v\n", frame)
-	}
 	layers, groups := createLayers(raw.Layers, frames)
 	tags := createTags(raw.Tags, frames)
 
@@ -300,11 +293,6 @@ func DeserializeFile(fd *os.File) (*Aseprite, error) {
 	if err := loader.ParseFrames(); err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("ase: %+v\n", loader.Ase)
-	// fmt.Printf("tags: %+v\n", loader.Ase.Tags)
-	// fmt.Printf("tag: %+v\n", loader.Ase.Tags[0])
-	// fmt.Printf("frame: %+v\n", loader.Ase.Frames[0])
 
 	return createAseprite(loader.Ase)
 }

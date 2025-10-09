@@ -50,18 +50,13 @@ func parseFrame(fh FrameHeader, data []byte) (*frame, error) {
 		chunkCount = int(fh.OldChunkNumber)
 	}
 
-	fmt.Printf("chunk count, %d\n", chunkCount)
-
 	for range chunkCount {
 		ch, err := common.BytesToStruct[chunk.Header](reader)
 		if err != nil {
 			return nil, err
 		}
 
-		fmt.Printf("type chunk: %x\n", ch.Type)
 		chunkData := make([]byte, ch.Size-chunk.HeaderSize)
-
-		fmt.Printf("ch, %+v\n", ch)
 
 		if err := common.BytesToStruct2(reader, chunkData); err != nil {
 			return nil, err
@@ -115,10 +110,6 @@ func parseFrame(fh FrameHeader, data []byte) (*frame, error) {
 		default:
 			lastChunkType = ch.Type
 		}
-
-		if ch.Type == chunk.UserDataChunkHex {
-			fmt.Printf("userdata: %+v\n", c)
-		}
 	}
 
 	return frame, nil
@@ -146,8 +137,6 @@ func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, []*
 		chunkCount = int(fh.OldChunkNumber)
 	}
 
-	fmt.Printf("chunk count, %d\n", chunkCount)
-
 	var lastChunkType chunk.ChunkDataType
 
 	for range chunkCount {
@@ -156,10 +145,7 @@ func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, []*
 			return nil, nil, nil, nil, nil, nil, nil, err
 		}
 
-		fmt.Printf("type chunk: %x\n", ch.Type)
 		chunkData := make([]byte, ch.Size-chunk.HeaderSize)
-
-		fmt.Printf("ch, %+v\n", ch)
 
 		if err := common.BytesToStruct2(reader, chunkData); err != nil {
 			return nil, nil, nil, nil, nil, nil, nil, err
@@ -237,7 +223,6 @@ func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, []*
 
 			switch lastChunkType {
 			case chunk.TagsChunkHex:
-				fmt.Printf("userdata: %+v\n", chunkUserData)
 				resolveUserDataTags(chunkUserData, tags)
 			case chunk.ColorProfileChunkHex:
 				colorProfile.UserData = chunkUserData
@@ -293,7 +278,6 @@ func (l *Loader) ParseFrames() error {
 		return err
 	}
 
-	fmt.Printf("\nframeId: 0\n")
 	frame, layers, tags, slices, externalFiles, colorProfile, palette, err := parseFirstFrame(fh, chunksBytes)
 	if err != nil {
 		return err
@@ -308,10 +292,7 @@ func (l *Loader) ParseFrames() error {
 	l.Ase.Palette = palette
 
 	header := l.Ase.Header
-	for i := range header.Frames - 1 {
-		index := i + 1
-		fmt.Printf("\nframeId: %d\n", index)
-
+	for range header.Frames - 1 {
 		fh, err := BytesToStruct[FrameHeader](l, FrameHeaderSize)
 		if err != nil {
 			return err

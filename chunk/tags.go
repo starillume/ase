@@ -2,7 +2,6 @@ package chunk
 
 import (
 	"bytes"
-	"fmt"
 
 	"github.com/starillume/ase/common"
 )
@@ -65,7 +64,6 @@ func ParseChunkTag(data []byte) (*Tag, error) {
 			return nil, err
 		}
 
-		fmt.Printf("b\n")
 		entry := TagEntry{
 			TagEntryData: entryData,
 			Name:         string(tagName),
