@@ -92,9 +92,9 @@ func parseFrame(fh FrameHeader, data []byte) (*frame, error) {
 				panic("so deus sabe irmao")
 			}
 			
-			lastCel := frame.Cels[len(frame.Cels)]
+			lastCel := frame.Cels[len(frame.Cels) - 1]
 			lastCel.Extra = celExtra
-			frame.Cels[len(frame.Cels)] = lastCel
+			frame.Cels[len(frame.Cels) - 1] = lastCel
 			lastChunkType = ch.Type
 
 		case chunk.UserDataChunkHex:
@@ -105,9 +105,9 @@ func parseFrame(fh FrameHeader, data []byte) (*frame, error) {
 
 			switch lastChunkType {
 			case chunk.CelChunkHex, chunk.CelExtraChunkHex:
-				lastCel := frame.Cels[len(frame.Cels)]
+				lastCel := frame.Cels[len(frame.Cels) - 1]
 				lastCel.UserData = chunkUserData
-				frame.Cels[len(frame.Cels)] = lastCel
+				frame.Cels[len(frame.Cels) - 1] = lastCel
 				lastChunkType = chunk.UserDataChunkHex
 			default:
 				lastChunkType = chunk.UserDataChunkHex
