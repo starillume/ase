@@ -69,7 +69,7 @@ func createFrames(rawFrames []*frame, rawHeader Header) ([]*Frame, map[int]image
 	for i, rawFrame := range rawFrames {
 		cels := make([]*Cel, 0)
 		for _, cel := range rawFrame.Cels {
-			newCel, _ := createCel(cel, i, int(rawHeader.Width), int(rawHeader.Height))
+			newCel, _ := createCel(cel, i, int(rawHeader.Width), int(rawHeader.Height), rawHeader.ColorDepth)
 			cels = append(cels, newCel)
 		}
 
@@ -87,14 +87,32 @@ func createFrames(rawFrames []*frame, rawHeader Header) ([]*Frame, map[int]image
 	return frames, frameImages
 }
 
-func createCel(cel *cel, frameIndex int, canvasWidth int, canvasHeight int) (*Cel, error) {
+func createCel(cel *cel, frameIndex int, canvasWidth int, canvasHeight int, colorDepth pixel.ColorDepth) (*Cel, error) {
 	var layerIndex int
 	var img image.Image
 	switch (*cel.Chunk).(chunk.Cel).CelType() {
-		case chunk.CelTypeCompressedImage, chunk.CelTypeRawImage:
-			celImageChunk := (*cel.Chunk).(chunk.ChunkCelImage)
+		case chunk.CelTypeCompressedImage:
+			celImageChunk := (*cel.Chunk).(*chunk.ChunkCelCompressedImage)
 			layerIndex = int(celImageChunk.LayerIndex)
-			img = celImageChunk.ChunkCelRawImageData.Pixels.ToImage(pixel.PixelToImageOpts{
+			pixelBytes, err := celImageChunk.ChunkCelCompressedImageData.Pixels.Decompress()
+			if err != nil {
+				return nil, err
+			}
+			pixels := pixel.ResolvePixelType(pixelBytes, colorDepth)
+			img = pixels.ToImage(pixel.PixelToImageOpts{
+				CelX: int(celImageChunk.X),
+				CelY: int(celImageChunk.Y),
+				Width: int(celImageChunk.Width),
+				Height: int(celImageChunk.Height),
+				CanvasWidth: canvasWidth,
+				CanvasHeight: canvasHeight,
+				// Palette: palette,
+			})
+		case chunk.CelTypeRawImage:
+			celImageChunk := (*cel.Chunk).(*chunk.ChunkCelImage)
+			layerIndex = int(celImageChunk.LayerIndex)
+			pixels := pixel.ResolvePixelType(celImageChunk.Pixels, colorDepth)
+			img = pixels.ToImage(pixel.PixelToImageOpts{
 				CelX: int(celImageChunk.X),
 				CelY: int(celImageChunk.Y),
 				Width: int(celImageChunk.Width),

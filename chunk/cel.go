@@ -79,7 +79,7 @@ type ChunkCelDimensionData struct {
 
 type ChunkCelRawImageData struct {
 	ChunkCelDimensionData
-	Pixels pixel.Pixels
+	Pixels []byte
 }
 
 const ChunkCelLinkedDataSize = 2
@@ -141,16 +141,15 @@ func ParseChunkCel(data []byte) (Chunk, error) {
 	// pixelDataSize := int(ch.Size - ChunkHeaderSize - ChunkCelDataSize - ChunkCelDimensionSize)
 	switch cData.CelType {
 	case CelTypeRawImage:
-		// var pixels Pixels
-		// var err error
-		// if pixels, err = l.GetPixels(ch, false, pixelDataSize); err != nil {
-		// 	return nil, err
-		// }
+		pixels := new(bytes.Buffer)
+
+		io.Copy(pixels, reader)
+
 		return &ChunkCelImage{
 			ChunkCelData: cData,
 			ChunkCelRawImageData: ChunkCelRawImageData{
 				ChunkCelDimensionData: dimensions,
-				// Pixels:                pixels,
+				Pixels:                pixels.Bytes(),
 			},
 		}, nil
 	case CelTypeCompressedImage:
