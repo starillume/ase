@@ -243,14 +243,14 @@ func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, []*
 				colorProfile.UserData = chunkUserData
 				lastChunkType = chunk.UserDataChunkHex
 			case chunk.LayerChunkHex:
-				lastLayer := layers[len(layers)]
+				lastLayer := layers[len(layers) - 1]
 				lastLayer.UserData = chunkUserData
-				layers[len(layers)] = lastLayer
+				layers[len(layers) - 1] = lastLayer
 				lastChunkType = chunk.UserDataChunkHex
 			case chunk.CelChunkHex, chunk.CelExtraChunkHex:
-				lastCel := frame.Cels[len(frame.Cels)]
+				lastCel := frame.Cels[len(frame.Cels) - 1]
 				lastCel.UserData = chunkUserData
-				frame.Cels[len(frame.Cels)] = lastCel
+				frame.Cels[len(frame.Cels) - 1] = lastCel
 				lastChunkType = chunk.UserDataChunkHex
 			case chunk.OldPaletteChunkHex, chunk.OldPaletteChunk2Hex, chunk.PaletteChunkHex:
 				palette.UserData = chunkUserData 
