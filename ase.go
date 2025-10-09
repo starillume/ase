@@ -19,7 +19,7 @@ type Aseprite struct {
 	Header Header
 	Palette pixel.Palette
 	Frames []*Frame
-	FrameImages map[int]image.Image
+	FrameImages []image.Image
 	Tags   []*Tag
 	Layers []*Layer
 	Groups []*LayerGroup
@@ -63,9 +63,9 @@ type LayerGroup struct {
 	Layers []*Layer
 }
 
-func createFrames(rawFrames []*frame, rawHeader Header) ([]*Frame, map[int]image.Image)  {
+func createFrames(rawFrames []*frame, rawHeader Header) ([]*Frame, []image.Image)  {
 	frames := make([]*Frame, 0)
-	frameImages := make(map[int]image.Image, 0)
+	frameImages := make([]image.Image, len(rawFrames))
 	for i, rawFrame := range rawFrames {
 		fmt.Printf("frame: %+v\n", rawFrame)
 		cels := make([]*Cel, 0)
@@ -313,7 +313,7 @@ func (a *Aseprite) SpriteSheet() (image.Image, error) {
 	return joinImagesHorizontally(a.FrameImages), nil
 }
 
-func joinImagesHorizontally(images map[int]image.Image) image.Image {
+func joinImagesHorizontally(images []image.Image) image.Image {
 	totalWidth := 0
 	maxHeight := 0
 	for _, img := range images {
