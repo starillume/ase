@@ -32,31 +32,3 @@ func CheckMagicNumber(magic, number uint16, from string) error {
 
 	return nil
 }
-
-// func (l *Loader) GetPixels(ch ChunkHeader, compressed bool, pixelDataSize int) (Pixels, error) {
-// 	var pbuf []byte
-// 	if compressed {
-// 		fmt.Printf("pixel data size compressed: %d\n", pixelDataSize)
-//
-// 		pixelsCompressed := make(PixelsZlib, pixelDataSize)
-// 		if err := l.BytesToStructV2(pixelDataSize, &pixelsCompressed); err != nil {
-// 			return nil, err
-// 		}
-//
-// 		var err error
-// 		pbuf, err = pixelsCompressed.Decompress()
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 	} else {
-// 		pbuf = make([]byte, pixelDataSize)
-// 		if err := l.BytesToStructV2(pixelDataSize, &pbuf); err != nil {
-// 			return nil, err
-// 		}
-// 	}
-//
-// 	fmt.Printf("pixels decompressed size: %d\n", len(pbuf))
-//
-// 	return l.ResolvePixelType(pbuf), nil
-// }
-//
