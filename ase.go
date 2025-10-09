@@ -67,6 +67,7 @@ func createFrames(rawFrames []*frame, rawHeader Header) ([]*Frame, map[int]image
 	frames := make([]*Frame, 0)
 	frameImages := make(map[int]image.Image, 0)
 	for i, rawFrame := range rawFrames {
+		fmt.Printf("frame: %+v\n", rawFrame)
 		cels := make([]*Cel, 0)
 		for _, cel := range rawFrame.Cels {
 			newCel, _ := createCel(cel, i, int(rawHeader.Width), int(rawHeader.Height), rawHeader.ColorDepth)
@@ -128,6 +129,8 @@ func createCel(cel *cel, frameIndex int, canvasWidth int, canvasHeight int, colo
 			return &Cel{}, nil
 	}
 
+	fmt.Printf("cel frame index %d", frameIndex)
+
 	return &Cel{
 		LayerIndex: layerIndex,
 		FrameIndex: frameIndex,
@@ -182,10 +185,15 @@ func createLayerFrameImages(layerIndex int, frames []*Frame) map[int]image.Image
 	layerFrameImages := make(map[int]image.Image)
 	for _, frame := range frames {
 		layeredCels := make([]*Cel, 0)
+
 		for _, cel := range frame.Cels {
 			if cel.LayerIndex == layerIndex {
-				layeredCels = append(layeredCels, frame.Cels...)
+				layeredCels = append(layeredCels, cel)
 			}
+		}
+
+		if len(layeredCels) == 0 {
+			continue
 		}
 
 		bounds := layeredCels[0].Image.Bounds()
@@ -255,6 +263,9 @@ func createLayers(rawLayers []*layer, frames []*Frame) ([]*Layer, []*LayerGroup)
 }
 func createAseprite(raw *rawAseprite) (*Aseprite, error) {
 	frames, frameImages := createFrames(raw.Frames, raw.Header)
+	for _, frame := range frames {
+		fmt.Printf("frame 2: %+v\n", frame)
+	}
 	layers, groups := createLayers(raw.Layers, frames)
 	tags := createTags(raw.Tags, frames)
 
