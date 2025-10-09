@@ -28,7 +28,7 @@ type Header struct {
 	Type ChunkDataType
 }
 
-type Chunk any
+type Chunk interface {}
 
 func Parse(ctype ChunkDataType, data []byte) (Chunk, error) {
 	switch ctype {

@@ -23,8 +23,8 @@ type Palette interface {
 }
 
 type PixelToImageOpts struct {
-	celX, celY, width, height, canvasWidth, canvasHeight int
-	palette Palette
+	CelX, CelY, Width, Height, CanvasWidth, CanvasHeight int
+	Palette Palette
 }
 
 type Pixels interface {
@@ -91,18 +91,18 @@ func BytesToPixelsGrayscale(data []byte) Grayscale {
 type RGBA [][4]byte
 
 func (p RGBA) ToImage(opts PixelToImageOpts) image.Image {
-	rect := image.Rect(0, 0, opts.canvasWidth, opts.canvasHeight)
+	rect := image.Rect(0, 0, opts.CanvasWidth, opts.CanvasHeight)
 	img := image.NewRGBA(rect)
-	for y := range opts.height {
-		for x := range opts.width {
-			i := y*opts.width + x
+	for y := range opts.Height {
+		for x := range opts.Width {
+			i := y*opts.Width + x
 			color := color.RGBA{
 				R: p[i][0],
 				G: p[i][1],
 				B: p[i][2],
 				A: p[i][3],
 			}
-			img.Set(x+opts.celX, y+opts.celY, color)
+			img.Set(x+opts.CelX, y+opts.CelY, color)
 		}
 	}
 
@@ -112,15 +112,15 @@ func (p RGBA) ToImage(opts PixelToImageOpts) image.Image {
 type Grayscale [][2]byte
 
 func (p Grayscale) ToImage(opts PixelToImageOpts) image.Image {
-	rect := image.Rect(0, 0, opts.canvasWidth, opts.canvasHeight)
+	rect := image.Rect(0, 0, opts.CanvasWidth, opts.CanvasHeight)
 	img := image.NewRGBA(rect)
-	for y := range opts.height {
-		for x := range opts.width {
-			i := y*opts.width + x
+	for y := range opts.Height {
+		for x := range opts.Width {
+			i := y*opts.Width + x
 			color := color.Gray16{
 				Y: binary.NativeEndian.Uint16(p[i][:]),
 			}
-			img.Set(x+opts.celX, y+opts.celY, color)
+			img.Set(x+opts.CelX, y+opts.CelY, color)
 		}
 	}
 
@@ -130,14 +130,14 @@ func (p Grayscale) ToImage(opts PixelToImageOpts) image.Image {
 type Indexed []byte
 
 func (p Indexed) ToImage(opts PixelToImageOpts) image.Image {
-	rect := image.Rect(0, 0, opts.canvasWidth, opts.canvasHeight)
+	rect := image.Rect(0, 0, opts.CanvasWidth, opts.CanvasHeight)
 	img := image.NewRGBA(rect)
-	for y := range opts.height {
-		for x := range opts.width {
-			i := y*opts.width + x
-			color := opts.palette.RevolveColor(i)
+	for y := range opts.Height {
+		for x := range opts.Width {
+			i := y*opts.Width + x
+			color := opts.Palette.RevolveColor(i)
 
-			img.Set(x+opts.celX, y+opts.celY, color)
+			img.Set(x+opts.CelX, y+opts.CelY, color)
 		}
 	}
 

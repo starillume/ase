@@ -36,6 +36,7 @@ type palette struct {
 
 type frame struct {
 	Cels []*cel
+	Header FrameHeader
 }
 
 type cel struct {

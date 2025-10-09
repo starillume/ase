@@ -11,6 +11,10 @@ import (
 
 type CelType uint16
 
+type Cel interface {
+	CelType() CelType
+}
+
 const (
 	CelTypeRawImage CelType = iota
 	CelTypeLinked
@@ -23,9 +27,17 @@ type ChunkCelImage struct {
 	ChunkCelRawImageData
 }
 
+func (c *ChunkCelImage) CelType() CelType {
+	return CelTypeRawImage
+}
+
 type ChunkCelCompressedImage struct {
 	ChunkCelData
 	ChunkCelCompressedImageData
+}
+
+func (c *ChunkCelCompressedImage) CelType() CelType {
+	return CelTypeCompressedImage
 }
 
 type ChunkCelLinked struct {
@@ -33,9 +45,17 @@ type ChunkCelLinked struct {
 	ChunkCelLinkedData
 }
 
+func (c *ChunkCelLinked) CelType() CelType {
+	return CelTypeLinked
+}
+
 type ChunkCelTilemap struct {
 	ChunkCelData
 	ChunkCelCompressedTilemapData
+}
+
+func (c *ChunkCelTilemap) CelType() CelType {
+	return CelTypeCompressedTilemap
 }
 
 const ChunkCelDataSize = 16

@@ -40,6 +40,7 @@ func parseFrame(fh FrameHeader, data []byte) (*frame, error) {
 
 	frame := &frame{
 		Cels: make([]*cel, 0),
+		Header: fh,
 	}
 
 	chunkCount := 0
@@ -128,6 +129,7 @@ func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, []*
 
 	frame := &frame{
 		Cels: make([]*cel, 0),
+		Header: fh,
 	}
 
 	layers := make([]*layer, 0)

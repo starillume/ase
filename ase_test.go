@@ -666,7 +666,7 @@ func TestDeserializeFile(t *testing.T) {
 // 	}
 // }
 //
-func verifyHeader(t *testing.T, ase *AsepriteFile) {
+func verifyHeader(t *testing.T, ase *Aseprite) {
 	if ase.Header.MagicNumber != 0xA5E0 {
 		t.Errorf("invalid header magic number: got 0x%X, want 0xA5E0", ase.Header.MagicNumber)
 	}
