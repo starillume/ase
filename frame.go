@@ -71,8 +71,12 @@ func parseFrame(fh FrameHeader, data []byte) (*frame, error) {
 
 		switch ch.Type {
 		case chunk.CelChunkHex:
+			cl, ok := c.(chunk.Cel)
+			if !ok {
+				panic("chunk cel couldn't cast")
+			}
 			cel := &cel{
-				Chunk: &c,
+				Chunk: cl,
 			}
 
 			frame.Cels = append(frame.Cels, cel)
@@ -173,8 +177,13 @@ func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, []*
 			layers = append(layers, layer)
 			lastChunkType = ch.Type
 		case chunk.CelChunkHex:
+			cl, ok := c.(chunk.Cel)
+			if !ok {
+				panic("chunk cel couldn't cast")
+			}
+
 			cel := &cel{
-				Chunk: &c,
+				Chunk: cl,
 			}
 
 			frame.Cels = append(frame.Cels, cel)

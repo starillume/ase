@@ -40,7 +40,7 @@ type frame struct {
 }
 
 type cel struct {
-	Chunk    *chunk.Chunk
+	Chunk    chunk.Cel
 	Extra    *chunk.CelExtra
 	UserData *chunk.UserData
 }

@@ -89,9 +89,9 @@ func createFrames(rawFrames []*frame, rawHeader Header) ([]*Frame, []image.Image
 func createCel(cel *cel, frameIndex int, canvasWidth int, canvasHeight int, colorDepth pixel.ColorDepth) (*Cel, error) {
 	var layerIndex int
 	var img image.Image
-	switch (*cel.Chunk).(chunk.Cel).CelType() {
+	switch (cel.Chunk).CelType() {
 		case chunk.CelTypeCompressedImage:
-			celImageChunk := (*cel.Chunk).(*chunk.ChunkCelCompressedImage)
+			celImageChunk := (cel.Chunk).(*chunk.ChunkCelCompressedImage)
 			layerIndex = int(celImageChunk.LayerIndex)
 			pixelBytes, err := celImageChunk.ChunkCelCompressedImageData.Pixels.Decompress()
 			if err != nil {
@@ -108,7 +108,7 @@ func createCel(cel *cel, frameIndex int, canvasWidth int, canvasHeight int, colo
 				// Palette: palette,
 			})
 		case chunk.CelTypeRawImage:
-			celImageChunk := (*cel.Chunk).(*chunk.ChunkCelImage)
+			celImageChunk := (cel.Chunk).(*chunk.ChunkCelImage)
 			layerIndex = int(celImageChunk.LayerIndex)
 			pixels := pixel.ResolvePixelType(celImageChunk.Pixels, colorDepth)
 			img = pixels.ToImage(pixel.PixelToImageOpts{
