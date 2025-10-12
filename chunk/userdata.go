@@ -3,12 +3,13 @@ package chunk
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/starillume/ase/common"
 )
 
-type readerFunc func([]byte) (any, error)
+type readerFunc func([]byte) (any, int, error)
 
 var (
 	readers        map[UserDataPropType]readerFunc
@@ -32,8 +33,8 @@ type UserData struct {
 }
 
 type ChunkUserDataPropMap struct {
-	External bool
-	Props    map[string]any
+	ExternalId int
+	Props      map[string]any
 }
 
 type ChunkUserDataTextSize uint32
@@ -93,113 +94,115 @@ func getReaders() map[UserDataPropType]readerFunc {
 
 func initReaders() {
 	readers = map[UserDataPropType]readerFunc{
-		UserDataBool: func(data []byte) (any, error) {
+		UserDataBool: func(data []byte) (any, int, error) {
 			var b uint8 // BYTE
 			reader := bytes.NewReader(data)
 			if err := common.BytesToStruct2(reader, &b); err != nil {
-				return nil, err
+				return nil, 0, err
 			}
-			return b != 0, nil
+			return b != 0, 1, nil
 		},
 
-		UserDataInt8: func(data []byte) (any, error) {
+		UserDataInt8: func(data []byte) (any, int, error) {
 			var v int8 // BYTE interpretado como signed
 			reader := bytes.NewReader(data)
-			return v, common.BytesToStruct2(reader, &v)
+			return v, 1, common.BytesToStruct2(reader, &v)
 		},
 
-		UserDataUint8: func(data []byte) (any, error) {
+		UserDataUint8: func(data []byte) (any, int, error) {
 			var v uint8
 			reader := bytes.NewReader(data)
-			return v, common.BytesToStruct2(reader, &v)
+			return v, 1, common.BytesToStruct2(reader, &v)
 		},
 
-		UserDataInt16: func(data []byte) (any, error) {
+		UserDataInt16: func(data []byte) (any, int, error) {
 			var v int16 // SHORT
 			reader := bytes.NewReader(data)
-			return v, common.BytesToStruct2(reader, &v)
+			return v, 2, common.BytesToStruct2(reader, &v)
 		},
 
-		UserDataUint16: func(data []byte) (any, error) {
+		UserDataUint16: func(data []byte) (any, int, error) {
 			var v uint16 // WORD
 			reader := bytes.NewReader(data)
-			return v, common.BytesToStruct2(reader, &v)
+			return v, 2, common.BytesToStruct2(reader, &v)
 		},
 
-		UserDataInt32: func(data []byte) (any, error) {
+		UserDataInt32: func(data []byte) (any, int, error) {
 			var v int32 // LONG
 			reader := bytes.NewReader(data)
-			return v, common.BytesToStruct2(reader, &v)
+			return v, 4, common.BytesToStruct2(reader, &v)
 		},
 
-		UserDataUint32: func(data []byte) (any, error) {
+		UserDataUint32: func(data []byte) (any, int, error) {
 			var v uint32 // DWORD
 			reader := bytes.NewReader(data)
-			return v, common.BytesToStruct2(reader, &v)
+			return v, 4, common.BytesToStruct2(reader, &v)
 		},
 
-		UserDataInt64: func(data []byte) (any, error) {
+		UserDataInt64: func(data []byte) (any, int, error) {
 			var v int64 // LONG64
 			reader := bytes.NewReader(data)
-			return v, common.BytesToStruct2(reader, &v)
+			return v, 8, common.BytesToStruct2(reader, &v)
 		},
 
-		UserDataUint64: func(data []byte) (any, error) {
+		UserDataUint64: func(data []byte) (any, int, error) {
 			var v uint64 // QWORD
 			reader := bytes.NewReader(data)
-			return v, common.BytesToStruct2(reader, &v)
+			return v, 8, common.BytesToStruct2(reader, &v)
 		},
 
-		UserDataFixed: func(data []byte) (any, error) {
+		UserDataFixed: func(data []byte) (any, int, error) {
 			var v common.Fixed // FIXED (16.16)
 			reader := bytes.NewReader(data)
-			return v, common.BytesToStruct2(reader, &v)
+			return v, 4, common.BytesToStruct2(reader, &v)
 		},
 
-		UserDataFloat: func(data []byte) (any, error) {
+		UserDataFloat: func(data []byte) (any, int, error) {
 			var v float32 // FLOAT
 			reader := bytes.NewReader(data)
-			return v, common.BytesToStruct2(reader, &v)
+			return v, 4, common.BytesToStruct2(reader, &v)
 		},
 
-		UserDataDouble: func(data []byte) (any, error) {
+		UserDataDouble: func(data []byte) (any, int, error) {
 			var v float64 // DOUBLE
 			reader := bytes.NewReader(data)
-			return v, common.BytesToStruct2(reader, &v)
+			return v, 8, common.BytesToStruct2(reader, &v)
 		},
 
-		UserDataString: func(data []byte) (any, error) {
+		UserDataString: func(data []byte) (any, int, error) {
 			var length uint16 // WORD
 			reader := bytes.NewReader(data)
 			if err := common.BytesToStruct2(reader, &length); err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 			stringData := make([]byte, length)
 			if err := common.BytesToStruct2(reader, &stringData); err != nil {
-				return nil, err
+				return nil, 0, err
 			}
-			return string(data), nil // UTF-8, sem \0
+
+			readed := int(2 + length)
+			return string(data), readed, nil // UTF-8, sem \0
 		},
 
-		UserDataPoint: func(data []byte) (any, error) {
+		UserDataPoint: func(data []byte) (any, int, error) {
 			var p struct {
 				X int32 // LONG
 				Y int32 // LONG
 			}
 			reader := bytes.NewReader(data)
-			return p, common.BytesToStruct2(reader, &p)
+			return p, 8, common.BytesToStruct2(reader, &p)
 		},
 
-		UserDataSize: func(data []byte) (any, error) {
+		UserDataSize: func(data []byte) (any, int, error) {
 			var s struct {
 				W int32 // LONG
 				H int32 // LONG
 			}
 			reader := bytes.NewReader(data)
-			return s, common.BytesToStruct2(reader, &s)
+			return s, 8, common.BytesToStruct2(reader, &s)
 		},
 
-		UserDataRect: func(data []byte) (any, error) {
+		UserDataRect: func(data []byte) (any, int, error) {
 			var r struct {
 				X int32
 				Y int32
@@ -207,21 +210,22 @@ func initReaders() {
 				H int32
 			}
 			reader := bytes.NewReader(data)
-			return r, common.BytesToStruct2(reader, &r)
+			return r, 16, common.BytesToStruct2(reader, &r)
 		},
 
-		UserDataVector: func(data []byte) (any, error) {
+		UserDataVector: func(data []byte) (any, int, error) {
 			var count uint32 // DWORD
 			reader := bytes.NewReader(data)
 			if err := common.BytesToStruct2(reader, &count); err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 
 			var elemType uint16 // WORD
 			if err := common.BytesToStruct2(reader, &elemType); err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 
+			readed := 4 + 2
 			var elements []any
 
 			if elemType == 0 {
@@ -229,53 +233,69 @@ func initReaders() {
 				for i := 0; i < int(count); i++ {
 					var etype uint16
 					if err := common.BytesToStruct2(reader, &etype); err != nil {
-						return nil, err
+						return nil, 0, err
 					}
 					readerUserData, ok := getReaders()[UserDataPropType(etype)]
 					if !ok {
-						return nil, fmt.Errorf("unsupported vector element type %d", etype)
+						return nil, 0, fmt.Errorf("unsupported vector element type %d", etype)
 					}
 					unread := data[len(data)-reader.Len():]
-					val, err := readerUserData(unread)
+					val, n, err := readerUserData(unread)
 					if err != nil {
-						return nil, err
+						return nil, 0, err
 					}
 					elements = append(elements, val)
+					readed += n + 2
+					reader.Seek(int64(n), io.SeekCurrent)
 				}
 			} else {
 				// Homogêneo: todos elementos têm o mesmo tipo
 				readerUserData, ok := getReaders()[UserDataPropType(elemType)]
 				if !ok {
-					return nil, fmt.Errorf("unsupported vector element type %d", elemType)
+					return nil, 0, fmt.Errorf("unsupported vector element type %d", elemType)
 				}
 				for i := 0; i < int(count); i++ {
 					unread := data[len(data)-reader.Len():]
-					val, err := readerUserData(unread)
+					val, n, err := readerUserData(unread)
 					if err != nil {
-						return nil, err
+						return nil, 0, err
 					}
 					elements = append(elements, val)
+					readed += n
+					reader.Seek(int64(n), io.SeekCurrent)
 				}
 			}
 
-			return elements, nil
+			return elements, readed, nil
 		},
 
-		UserDataUUID: func(data []byte) (any, error) {
+		UserDataUUID: func(data []byte) (any, int, error) {
 			var uuid [16]byte
 			reader := bytes.NewReader(data)
-			return uuid, common.BytesToStruct2(reader, &uuid)
+			return uuid, 16, common.BytesToStruct2(reader, &uuid)
 		},
 
-		UserDataProp: func(data []byte) (any, error) {
+		UserDataProp: func(data []byte) (any, int, error) {
 			var propsLen uint32
 			reader := bytes.NewReader(data)
 			if err := common.BytesToStruct2(reader, &propsLen); err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 
 			unread := data[len(data)-reader.Len():]
-			return ParseUserDataProps(unread, int(propsLen))
+			p, n, err := ParseUserDataProps(unread, int(propsLen))
+			if err != nil {
+				return nil, 0, err
+			}
+
+			m := &ChunkUserDataPropMap{
+				ExternalId: 0,
+				Props:      p,
+			}
+
+			readed := 4 + n
+
+			return m, readed, nil
 		},
 	}
 }
@@ -320,9 +340,24 @@ func ParseChunkUserData(data []byte) (Chunk, error) {
 		}
 
 		propMaps := make([]ChunkUserDataPropMap, mapHeader.PropMapNumbers)
-		for range mapHeader.PropMapNumbers {
+
+		propsSize := int(mapHeader.SizeInBytes)
+
+		for i := range mapHeader.PropMapNumbers {
+			if propsSize <= 0 {
+				return nil, fmt.Errorf("malformed file, SizeInBytes is smaller than the total size")
+			}
+
 			unread := data[len(data)-reader.Len():]
-			ParseUserDataPropMap(unread)
+			pm, n, err := ParseUserDataPropMap(unread)
+			if err != nil {
+				return nil, err
+			}
+
+			propsSize -= n
+
+			propMaps[i] = *pm
+			reader.Seek(int64(n), io.SeekCurrent)
 		}
 
 		chunk.Maps = &propMaps
@@ -331,62 +366,77 @@ func ParseChunkUserData(data []byte) (Chunk, error) {
 	return chunk, nil
 }
 
-func ParseUserDataPropMap(data []byte) (*ChunkUserDataPropMap, error) {
+func ParseUserDataPropMap(data []byte) (*ChunkUserDataPropMap, int, error) {
 	reader := bytes.NewReader(data)
+	readed := 0
 
 	var propMapData ChunkUserDataPropMapData
 	if err := common.BytesToStruct2(reader, &propMapData); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
+	readed += 8
+
 	propMap := &ChunkUserDataPropMap{
-		External: (propMapData.PropKey != 0),
+		ExternalId: int(propMapData.PropKey),
 	}
 
 	unread := data[len(data)-reader.Len():]
-	propsmap, err := ParseUserDataProps(unread, int(propMapData.PropNumbers))
+	propsmap, n, err := ParseUserDataProps(unread, int(propMapData.PropNumbers))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+
+	readed += n
 
 	propMap.Props = propsmap
 
-	return propMap, nil
+	return propMap, readed, nil
 }
 
-func ParseUserDataProps(data []byte, count int) (map[string]any, error) {
+func ParseUserDataProps(data []byte, count int) (map[string]any, int, error) {
 	reader := bytes.NewReader(data)
+
+	readed := 0
 
 	props := make(map[string]any, count)
 	for range count {
 		var nameLen uint16
 		if err := common.BytesToStruct2(reader, &nameLen); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
+
+		readed += 2
 
 		nameBytes := make([]byte, nameLen)
 		if err := common.BytesToStruct2(reader, &nameBytes); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
+
+		readed += int(nameLen)
 
 		key := string(nameBytes)
 
 		var typeValue UserDataPropType
 		if err := common.BytesToStruct2(reader, &typeValue); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
+
+		readed += 2
 
 		if readerUserData, ok := getReaders()[typeValue]; ok {
 			unread := data[len(data)-reader.Len():]
-			value, err := readerUserData(unread)
+			value, n, err := readerUserData(unread)
 			if err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 			props[key] = value
+			readed += n
+			reader.Seek(int64(n), io.SeekCurrent)
 		} else {
-			return nil, fmt.Errorf("unsupported type %d", typeValue)
+			return nil, 0, fmt.Errorf("unsupported type %d", typeValue)
 		}
 	}
 
-	return props, nil
+	return props, readed, nil
 }
