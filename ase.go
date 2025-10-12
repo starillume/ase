@@ -14,6 +14,8 @@ import (
 // TODO: userdata
 // not sure how its type would be defined tho
 
+// TODO: slice
+// tem um negocio de key que muda as props dela com o passar dos frames
 type Aseprite struct {
 	Header      Header
 	Palette     pixel.Palette
