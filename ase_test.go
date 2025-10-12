@@ -75,24 +75,23 @@ func fakeRawLayer() *layer {
 }
 
 func fakeRawTag() *tag {
-	c := &chunk.Tag{
-		Entries: []chunk.TagEntry{
-			{
-				Name: "tag1",
-				TagEntryData: chunk.TagEntryData{
-					FromFrame:         1,
-					ToFrame:           3,
-					LoopAnimationType: chunk.LoopAnimationForward,
-					Repeat:            16,
-					Color:             [3]byte{255, 0, 0},
-					TagNameSize:       4,
-				},
-			},
+	e := &chunk.TagEntry{
+		Name: "tag1",
+		TagEntryData: chunk.TagEntryData{
+			FromFrame:         1,
+			ToFrame:           3,
+			LoopAnimationType: chunk.LoopAnimationForward,
+			Repeat:            16,
+			Color:             [3]byte{255, 0, 0},
+			TagNameSize:       4,
 		},
 	}
 
 	return &tag{
-		Chunk: c,
+		Entry: e,
+		UserData: &chunk.UserData{
+			Text: "tag1",
+		},
 	}
 }
 
@@ -150,6 +149,14 @@ func TestCreateTags(t *testing.T) {
 	c := tags[0].Color.(color.RGBA)
 	if c.R != 255 || c.G != 0 || c.B != 0 {
 		t.Errorf("Expected color red, got %v", c)
+	}
+
+	if tags[0].UserData == nil  {
+		t.Fatalf("Expected UserData in tag, got nil")
+	}
+
+	if tags[0].UserData.Text != "tag1" {
+		t.Errorf("Expected UserData tag text 'tag1', got %s", tags[0].UserData.Text)
 	}
 }
 
