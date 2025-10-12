@@ -23,7 +23,6 @@ func fakeRawFrame() *frame {
 
 	pc := buf.Bytes()
 
-
 	c := &chunk.ChunkCelCompressedImage{
 		ChunkCelData: chunk.ChunkCelData{
 			LayerIndex: 0,
@@ -217,45 +216,36 @@ func TestDeserializeFile(t *testing.T) {
 	}
 	defer fd.Close()
 
-	ase, err := DeserializeFile(fd)
+	l, err := deserializeFile(fd)
 	if err != nil {
 		t.Fatalf("failed to deserialize file %s: %v", testFilePath, err)
 	}
 
-	verifyHeader(t, ase)
-	verifyFrames(t, ase)
-	// verifyAllDataRead(t, ase, testFilePath)
+	verifyHeader(t, l.Ase)
+	verifyFrames(t, l.Ase)
+	verifyAllDataRead(t, l, testFilePath)
 }
-func verifyHeader(t *testing.T, ase *Aseprite) {
+func verifyHeader(t *testing.T, ase *rawAseprite) {
 	if ase.Header.MagicNumber != 0xA5E0 {
 		t.Errorf("invalid header magic number: got 0x%X, want 0xA5E0", ase.Header.MagicNumber)
 	}
 }
 
-func verifyFrames(t *testing.T, ase *Aseprite) {
+func verifyFrames(t *testing.T, ase *rawAseprite) {
 	expectedFrameCount := 7
 	if len(ase.Frames) != expectedFrameCount {
 		t.Errorf("expected %d frames, got %d", expectedFrameCount, len(ase.Frames))
 	}
 }
 
-// func verifyAllDataRead(t *testing.T, ase *Aseprite, filepath string) {
-// 	stat, err := os.Stat(filepath)
-// 	if err != nil {
-// 		t.Fatalf("failed to stat file %s: %v", filepath, err)
-// 	}
-// 	fileSize := stat.Size()
-//
-// 	read := int64(HeaderSize)
-//
-// 	for _, frame := range ase.Frames {
-// 		read += int64(FrameHeaderSize)
-// 		for _, chunk := range frame.Chunks {
-// 			read += int64(chunk.GetHeader().Size)
-// 		}
-// 	}
-//
-// 	if fileSize-read > 16 {
-// 		t.Errorf("expected file to be fully read, but %d bytes remain (read %d of %d)", fileSize-read, read, fileSize)
-// 	}
-// }
+func verifyAllDataRead(t *testing.T, l *Loader, filepath string) {
+	stat, err := os.Stat(filepath)
+	if err != nil {
+		t.Fatalf("failed to stat file %s: %v", filepath, err)
+	}
+	fileSize := stat.Size()
+
+	if fileSize-int64(l.TotalRead) > 16 {
+		t.Errorf("expected file to be fully read, but %d bytes remain (read %d of %d)", fileSize-int64(l.TotalRead), l.TotalRead, fileSize)
+	}
+}

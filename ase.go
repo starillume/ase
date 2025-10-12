@@ -273,7 +273,7 @@ func createAseprite(raw *rawAseprite) (*Aseprite, error) {
 	}, nil
 }
 
-func DeserializeFile(fd *os.File) (*Aseprite, error) {
+func deserializeFile(fd *os.File) (*Loader, error) {
 	loader := NewLoader(fd)
 
 	var headerBytes = make([]byte, HeaderSize)
@@ -291,6 +291,15 @@ func DeserializeFile(fd *os.File) (*Aseprite, error) {
 	loader.Ase.Header = *header
 
 	if err := loader.ParseFrames(); err != nil {
+		return nil, err
+	}
+
+	return loader, nil
+}
+
+func DeserializeFile(fd *os.File) (*Aseprite, error) {
+	loader, err := deserializeFile(fd)
+	if err != nil {
 		return nil, err
 	}
 
