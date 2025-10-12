@@ -35,7 +35,7 @@ type palette struct {
 }
 
 type frame struct {
-	Cels []*cel
+	Cels   []*cel
 	Header FrameHeader
 }
 
@@ -66,19 +66,22 @@ type externalFiles struct {
 }
 
 type Loader struct {
-	Reader io.Reader
-	Buf    []byte
-	Buffer *bytes.Buffer
-	Ase    *rawAseprite
+	Reader    io.Reader
+	Buf       []byte
+	Buffer    *bytes.Buffer
+	Ase       *rawAseprite
+	TotalRead int
 }
 
 func (l *Loader) readToBuffer() error {
-	_, err := l.Reader.Read(l.Buf)
+	n, err := l.Reader.Read(l.Buf)
 	if err != nil {
 		return err
 	}
 
-	_, err = l.Buffer.Write(l.Buf)
+	l.TotalRead += n
+
+	_, err = l.Buffer.Write(l.Buf[:n])
 	if err != nil {
 		return err
 	}
@@ -153,5 +156,6 @@ func NewLoader(fd *os.File) *Loader {
 		Buf:    make([]byte, ChunkSize),
 		Buffer: new(bytes.Buffer),
 		Ase:    new(rawAseprite),
+		TotalRead: 0,
 	}
 }

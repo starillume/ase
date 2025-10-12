@@ -78,6 +78,10 @@ func TestLoaderReadToBuffer(t *testing.T) {
 	if loader.Buffer.Len() != 5 {
 		t.Errorf("Expected buffer length 5, got %d", loader.Buffer.Len())
 	}
+
+	if loader.TotalRead != 5 {
+		t.Errorf("Expected TotalRead 5, got %d", loader.TotalRead)
+	}
 }
 
 func TestLoaderEnoughSpaceToRead(t *testing.T) {
