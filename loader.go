@@ -46,7 +46,7 @@ type cel struct {
 }
 
 type tag struct {
-	Chunk    *chunk.Tag
+	Entry    *chunk.TagEntry
 	UserData *chunk.UserData
 }
 

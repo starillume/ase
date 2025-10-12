@@ -39,7 +39,7 @@ func parseFrame(fh FrameHeader, data []byte) (*frame, error) {
 	reader := bytes.NewReader(data)
 
 	frame := &frame{
-		Cels: make([]*cel, 0),
+		Cels:   make([]*cel, 0),
 		Header: fh,
 	}
 
@@ -90,10 +90,10 @@ func parseFrame(fh FrameHeader, data []byte) (*frame, error) {
 			if lastChunkType != chunk.CelChunkHex {
 				panic("so deus sabe irmao")
 			}
-			
-			lastCel := frame.Cels[len(frame.Cels) - 1]
+
+			lastCel := frame.Cels[len(frame.Cels)-1]
 			lastCel.Extra = celExtra
-			frame.Cels[len(frame.Cels) - 1] = lastCel
+			frame.Cels[len(frame.Cels)-1] = lastCel
 			lastChunkType = ch.Type
 
 		case chunk.UserDataChunkHex:
@@ -104,9 +104,9 @@ func parseFrame(fh FrameHeader, data []byte) (*frame, error) {
 
 			switch lastChunkType {
 			case chunk.CelChunkHex, chunk.CelExtraChunkHex:
-				lastCel := frame.Cels[len(frame.Cels) - 1]
+				lastCel := frame.Cels[len(frame.Cels)-1]
 				lastCel.UserData = chunkUserData
-				frame.Cels[len(frame.Cels) - 1] = lastCel
+				frame.Cels[len(frame.Cels)-1] = lastCel
 				lastChunkType = chunk.UserDataChunkHex
 			default:
 				lastChunkType = chunk.UserDataChunkHex
@@ -123,7 +123,7 @@ func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, []*
 	reader := bytes.NewReader(data)
 
 	frame := &frame{
-		Cels: make([]*cel, 0),
+		Cels:   make([]*cel, 0),
 		Header: fh,
 	}
 
@@ -169,7 +169,7 @@ func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, []*
 			if !ok {
 				panic("chunk layer couldn't cast")
 			}
-			
+
 			layer := &layer{
 				Chunk: layerChunk,
 			}
@@ -197,7 +197,7 @@ func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, []*
 			if lastChunkType != chunk.CelChunkHex {
 				panic("so deus sabe irmao")
 			}
-			
+
 			lastCel := frame.Cels[len(frame.Cels)]
 			lastCel.Extra = celExtra
 			frame.Cels[len(frame.Cels)] = lastCel
@@ -216,10 +216,15 @@ func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, []*
 			if !ok {
 				panic("chunk tag couldn't cast")
 			}
-			t := &tag{
-				Chunk: chunkTag,
+
+			for _, tentry := range chunkTag.Entries {
+				t := &tag{
+					Entry: &tentry,
+				}
+
+				tags = append(tags, t)
 			}
-			tags = append(tags, t)
+
 			lastChunkType = ch.Type
 		case chunk.OldPaletteChunkHex, chunk.OldPaletteChunk2Hex, chunk.PaletteChunkHex:
 			palette.Chunk = &c
@@ -237,17 +242,17 @@ func parseFirstFrame(fh FrameHeader, data []byte) (*frame, []*layer, []*tag, []*
 				colorProfile.UserData = chunkUserData
 				lastChunkType = chunk.UserDataChunkHex
 			case chunk.LayerChunkHex:
-				lastLayer := layers[len(layers) - 1]
+				lastLayer := layers[len(layers)-1]
 				lastLayer.UserData = chunkUserData
-				layers[len(layers) - 1] = lastLayer
+				layers[len(layers)-1] = lastLayer
 				lastChunkType = chunk.UserDataChunkHex
 			case chunk.CelChunkHex, chunk.CelExtraChunkHex:
-				lastCel := frame.Cels[len(frame.Cels) - 1]
+				lastCel := frame.Cels[len(frame.Cels)-1]
 				lastCel.UserData = chunkUserData
-				frame.Cels[len(frame.Cels) - 1] = lastCel
+				frame.Cels[len(frame.Cels)-1] = lastCel
 				lastChunkType = chunk.UserDataChunkHex
 			case chunk.OldPaletteChunkHex, chunk.OldPaletteChunk2Hex, chunk.PaletteChunkHex:
-				palette.UserData = chunkUserData 
+				palette.UserData = chunkUserData
 				lastChunkType = chunk.UserDataChunkHex
 			default:
 				lastChunkType = chunk.UserDataChunkHex

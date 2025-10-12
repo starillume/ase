@@ -15,35 +15,35 @@ import (
 // not sure how its type would be defined tho
 
 type Aseprite struct {
-	Header Header
-	Palette pixel.Palette
-	Frames []*Frame
+	Header      Header
+	Palette     pixel.Palette
+	Frames      []*Frame
 	FrameImages []image.Image
-	Tags   []*Tag
-	Layers []*Layer
-	Groups []*LayerGroup
+	Tags        []*Tag
+	Layers      []*Layer
+	Groups      []*LayerGroup
 }
 
 type Frame struct {
-	Index int
+	Index    int
 	Duration int // ms
-	Cels []*Cel
-	Image image.Image
+	Cels     []*Cel
+	Image    image.Image
 }
 
 type Layer struct {
-	Name string
-	Index int
-	Visible bool
-	Opacity float64
-	BlendMode string
+	Name        string
+	Index       int
+	Visible     bool
+	Opacity     float64
+	BlendMode   string
 	FrameImages map[int]image.Image
 }
 
 type Cel struct {
 	LayerIndex int
 	FrameIndex int
-	Image image.Image
+	Image      image.Image
 }
 
 type Tag struct {
@@ -54,15 +54,15 @@ type Tag struct {
 	LoopAnimationType chunk.LoopAnimationType
 	Repeat            int
 	Color             color.Color
-	UserData          any
+	UserData          *chunk.UserData
 }
 
 type LayerGroup struct {
-	Name string
+	Name   string
 	Layers []*Layer
 }
 
-func createFrames(rawFrames []*frame, rawHeader Header) ([]*Frame, []image.Image)  {
+func createFrames(rawFrames []*frame, rawHeader Header) ([]*Frame, []image.Image) {
 	frames := make([]*Frame, 0)
 	frameImages := make([]image.Image, len(rawFrames))
 	for i, rawFrame := range rawFrames {
@@ -90,47 +90,47 @@ func createCel(cel *cel, frameIndex int, canvasWidth int, canvasHeight int, colo
 	var layerIndex int
 	var img image.Image
 	switch (cel.Chunk).CelType() {
-		case chunk.CelTypeCompressedImage:
-			celImageChunk := (cel.Chunk).(*chunk.ChunkCelCompressedImage)
-			layerIndex = int(celImageChunk.LayerIndex)
-			pixelBytes, err := celImageChunk.ChunkCelCompressedImageData.Pixels.Decompress()
-			if err != nil {
-				return nil, err
-			}
-			pixels := pixel.ResolvePixelType(pixelBytes, colorDepth)
-			img = pixels.ToImage(pixel.PixelToImageOpts{
-				CelX: int(celImageChunk.X),
-				CelY: int(celImageChunk.Y),
-				Width: int(celImageChunk.Width),
-				Height: int(celImageChunk.Height),
-				CanvasWidth: canvasWidth,
-				CanvasHeight: canvasHeight,
-				// Palette: palette,
-			})
-		case chunk.CelTypeRawImage:
-			celImageChunk := (cel.Chunk).(*chunk.ChunkCelImage)
-			layerIndex = int(celImageChunk.LayerIndex)
-			pixels := pixel.ResolvePixelType(celImageChunk.Pixels, colorDepth)
-			img = pixels.ToImage(pixel.PixelToImageOpts{
-				CelX: int(celImageChunk.X),
-				CelY: int(celImageChunk.Y),
-				Width: int(celImageChunk.Width),
-				Height: int(celImageChunk.Height),
-				CanvasWidth: canvasWidth,
-				CanvasHeight: canvasHeight,
-				// Palette: palette,
-			})
-		// TODO:
-		// case chunk.CelTypeLinked:
-		// case chunk.CelTypeCompressedTilemap:
-		default:
-			return &Cel{}, nil
+	case chunk.CelTypeCompressedImage:
+		celImageChunk := (cel.Chunk).(*chunk.ChunkCelCompressedImage)
+		layerIndex = int(celImageChunk.LayerIndex)
+		pixelBytes, err := celImageChunk.ChunkCelCompressedImageData.Pixels.Decompress()
+		if err != nil {
+			return nil, err
+		}
+		pixels := pixel.ResolvePixelType(pixelBytes, colorDepth)
+		img = pixels.ToImage(pixel.PixelToImageOpts{
+			CelX:         int(celImageChunk.X),
+			CelY:         int(celImageChunk.Y),
+			Width:        int(celImageChunk.Width),
+			Height:       int(celImageChunk.Height),
+			CanvasWidth:  canvasWidth,
+			CanvasHeight: canvasHeight,
+			// Palette: palette,
+		})
+	case chunk.CelTypeRawImage:
+		celImageChunk := (cel.Chunk).(*chunk.ChunkCelImage)
+		layerIndex = int(celImageChunk.LayerIndex)
+		pixels := pixel.ResolvePixelType(celImageChunk.Pixels, colorDepth)
+		img = pixels.ToImage(pixel.PixelToImageOpts{
+			CelX:         int(celImageChunk.X),
+			CelY:         int(celImageChunk.Y),
+			Width:        int(celImageChunk.Width),
+			Height:       int(celImageChunk.Height),
+			CanvasWidth:  canvasWidth,
+			CanvasHeight: canvasHeight,
+			// Palette: palette,
+		})
+	// TODO:
+	// case chunk.CelTypeLinked:
+	// case chunk.CelTypeCompressedTilemap:
+	default:
+		return &Cel{}, nil
 	}
 
 	return &Cel{
 		LayerIndex: layerIndex,
 		FrameIndex: frameIndex,
-		Image: img,
+		Image:      img,
 	}, nil
 }
 
@@ -138,7 +138,7 @@ func createFrameImage(frameCels []*Cel) image.Image {
 	if len(frameCels) == 0 {
 		return nil
 	}
-	
+
 	// making sure that it draws respecting layer order
 	sort.Slice(frameCels, func(i, j int) bool {
 		return frameCels[i].LayerIndex < frameCels[j].LayerIndex
@@ -157,21 +157,20 @@ func createFrameImage(frameCels []*Cel) image.Image {
 func createTags(rawTags []*tag, frames []*Frame) []*Tag {
 	tags := make([]*Tag, 0)
 	for _, rawTag := range rawTags {
-		for _, entry := range rawTag.Chunk.Entries {
-			from := int(entry.FromFrame)
-			to := int(entry.ToFrame)
-			tag := &Tag{
-				Name: entry.Name,
-				From: from,
-				To: to,
-				Frames: frames[from:to],
-				LoopAnimationType: entry.LoopAnimationType,
-				Repeat: int(entry.Repeat),
-				Color: color.RGBA{entry.Color[0], entry.Color[1], entry.Color[2], 255},
-			}
-
-			tags = append(tags, tag)
+		from := int(rawTag.Entry.FromFrame)
+		to := int(rawTag.Entry.ToFrame)
+		tag := &Tag{
+			Name:              rawTag.Entry.Name,
+			From:              from,
+			To:                to,
+			Frames:            frames[from:to],
+			LoopAnimationType: rawTag.Entry.LoopAnimationType,
+			Repeat:            int(rawTag.Entry.Repeat),
+			Color:             color.RGBA{rawTag.Entry.Color[0], rawTag.Entry.Color[1], rawTag.Entry.Color[2], 255},
+			UserData:          rawTag.UserData,
 		}
+
+		tags = append(tags, tag)
 	}
 
 	return tags
@@ -221,7 +220,7 @@ func createLayers(rawLayers []*layer, frames []*Frame) ([]*Layer, []*LayerGroup)
 			FrameImages: layerFrameImages,
 
 			// FIX: preguiça
-			BlendMode:   "Normal",
+			BlendMode: "Normal",
 		}
 		layers = append(layers, layer)
 
@@ -265,11 +264,11 @@ func createAseprite(raw *rawAseprite) (*Aseprite, error) {
 	return &Aseprite{
 		Header: raw.Header,
 		// Palette: yeah i dont know bro
-		Frames: frames,
+		Frames:      frames,
 		FrameImages: frameImages,
-		Tags: tags,
-		Layers: layers,
-		Groups: groups,
+		Tags:        tags,
+		Layers:      layers,
+		Groups:      groups,
 	}, nil
 }
 
