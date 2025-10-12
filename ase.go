@@ -38,12 +38,14 @@ type Layer struct {
 	Opacity     float64
 	BlendMode   string
 	FrameImages map[int]image.Image
+	UserData    *chunk.UserData
 }
 
 type Cel struct {
 	LayerIndex int
 	FrameIndex int
 	Image      image.Image
+	UserData   *chunk.UserData
 }
 
 type Tag struct {

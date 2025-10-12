@@ -43,7 +43,7 @@ func fakeRawFrame() *frame {
 
 	return &frame{
 		Cels: []*cel{
-			{Chunk: c},
+			{Chunk: c, UserData: &chunk.UserData{Text: "cel"}},
 		},
 		Header: FrameHeader{
 			FrameDuration: 100,
@@ -71,6 +71,7 @@ func fakeRawLayer() *layer {
 
 	return &layer{
 		Chunk: c,
+		UserData: &chunk.UserData{Text: "layer"},
 	}
 }
 
@@ -118,6 +119,14 @@ func TestCreateCel(t *testing.T) {
 	}
 	if c.FrameIndex != 0 {
 		t.Errorf("Expected FrameIndex 0, got %d", c.FrameIndex)
+	}
+
+	if c.UserData == nil  {
+		t.Fatalf("Expected UserData in cel, got nil")
+	}
+
+	if c.UserData.Text != "cel" {
+		t.Errorf("Expected UserData cel text 'cel', got %s", c.UserData.Text)
 	}
 }
 
@@ -189,6 +198,14 @@ func TestCreateLayers(t *testing.T) {
 	}
 	if len(groups) != 0 {
 		t.Errorf("Expected 0 groups, got %d", len(groups))
+	}
+
+	if layers[0].UserData == nil  {
+		t.Fatalf("Expected UserData in layer, got nil")
+	}
+
+	if layers[0].UserData.Text != "layer" {
+		t.Errorf("Expected UserData layer text 'layer', got %s", layers[0].UserData.Text)
 	}
 }
 
