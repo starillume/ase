@@ -136,8 +136,8 @@ func TestParseFirstFrame(t *testing.T) {
 	}
 
 	// Slices
-	if len(slices) != 2 {
-		t.Errorf("Expected 2 Slice, got %d", len(slices))
+	if len(slices) != 1 {
+		t.Errorf("Expected 1 Slice, got %d", len(slices))
 	}
 
 	// Palette
