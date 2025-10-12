@@ -32,65 +32,68 @@ func createChunkUserDataWithVectors() []byte {
 	color := chunk.ChunkUserDataColor{R: 10, G: 20, B: 30, A: 255}
 	binary.Write(buf, binary.LittleEndian, color)
 
-	// Property map header: 1 map
-	propMapHeader := chunk.ChunkUserDataPropMapHeader{
-		SizeInBytes:    0,
-		PropMapNumbers: 3, // testProp + homVec + hetVec
-	}
-	binary.Write(buf, binary.LittleEndian, propMapHeader)
+	propsBuf := new(bytes.Buffer)
 
 	// Property map data
 	propMapData := chunk.ChunkUserDataPropMapData{
 		PropKey:     0,
 		PropNumbers: 3,
 	}
-	binary.Write(buf, binary.LittleEndian, propMapData)
+	binary.Write(propsBuf, binary.LittleEndian, propMapData)
 
 	// Property 1: "testProp" int32=123
 	propName := "testProp"
 	nameLen := uint16(len(propName))
-	binary.Write(buf, binary.LittleEndian, nameLen)
-	buf.Write([]byte(propName))
+	binary.Write(propsBuf, binary.LittleEndian, nameLen)
+	propsBuf.Write([]byte(propName))
 	typeValue := chunk.UserDataInt32
-	binary.Write(buf, binary.LittleEndian, typeValue)
-	binary.Write(buf, binary.LittleEndian, int32(123))
+	binary.Write(propsBuf, binary.LittleEndian, typeValue)
+	binary.Write(propsBuf, binary.LittleEndian, int32(123))
 
 	// Property 2: "homVec" vector int32 [1,2,3]
 	propName = "homVec"
 	nameLen = uint16(len(propName))
-	binary.Write(buf, binary.LittleEndian, nameLen)
-	buf.Write([]byte(propName))
+	binary.Write(propsBuf, binary.LittleEndian, nameLen)
+	propsBuf.Write([]byte(propName))
 	typeValue = chunk.UserDataVector
-	binary.Write(buf, binary.LittleEndian, typeValue)
+	binary.Write(propsBuf, binary.LittleEndian, typeValue)
 	// Vector header
 	count := uint32(3)
 	elemType := uint16(chunk.UserDataInt32) // homogeneous
-	binary.Write(buf, binary.LittleEndian, count)
-	binary.Write(buf, binary.LittleEndian, elemType)
+	binary.Write(propsBuf, binary.LittleEndian, count)
+	binary.Write(propsBuf, binary.LittleEndian, elemType)
 	// Elements
-	binary.Write(buf, binary.LittleEndian, int32(1))
-	binary.Write(buf, binary.LittleEndian, int32(2))
-	binary.Write(buf, binary.LittleEndian, int32(3))
+	binary.Write(propsBuf, binary.LittleEndian, int32(1))
+	binary.Write(propsBuf, binary.LittleEndian, int32(2))
+	binary.Write(propsBuf, binary.LittleEndian, int32(3))
 
 	// Property 3: "hetVec" vector hetero [int32=5, float32=1.5]
 	propName = "hetVec"
 	nameLen = uint16(len(propName))
-	binary.Write(buf, binary.LittleEndian, nameLen)
-	buf.Write([]byte(propName))
+	binary.Write(propsBuf, binary.LittleEndian, nameLen)
+	propsBuf.Write([]byte(propName))
 	typeValue = chunk.UserDataVector
-	binary.Write(buf, binary.LittleEndian, typeValue)
+	binary.Write(propsBuf, binary.LittleEndian, typeValue)
 	// Vector header
 	count = uint32(2)
 	elemType = 0 // heterogeneous
-	binary.Write(buf, binary.LittleEndian, count)
-	binary.Write(buf, binary.LittleEndian, elemType)
+	binary.Write(propsBuf, binary.LittleEndian, count)
+	binary.Write(propsBuf, binary.LittleEndian, elemType)
 	// Elements: first int32, then float32
 	elemType0 := uint16(chunk.UserDataInt32)
 	elemType1 := uint16(chunk.UserDataFloat)
-	binary.Write(buf, binary.LittleEndian, elemType0)
-	binary.Write(buf, binary.LittleEndian, int32(5))
-	binary.Write(buf, binary.LittleEndian, elemType1)
-	binary.Write(buf, binary.LittleEndian, float32(1.5))
+	binary.Write(propsBuf, binary.LittleEndian, elemType0)
+	binary.Write(propsBuf, binary.LittleEndian, int32(5))
+	binary.Write(propsBuf, binary.LittleEndian, elemType1)
+	binary.Write(propsBuf, binary.LittleEndian, float32(1.5))
+
+	// Property map header: 1 map
+	propMapHeader := chunk.ChunkUserDataPropMapHeader{
+		SizeInBytes:    uint32(propsBuf.Len()),
+		PropMapNumbers: 1,
+	}
+	binary.Write(buf, binary.LittleEndian, propMapHeader)
+	binary.Write(buf, binary.LittleEndian, propsBuf.Bytes())
 
 	return buf.Bytes()
 }
@@ -119,7 +122,7 @@ func TestParseChunkUserDataWithVectors(t *testing.T) {
 
 	// Property map
 	if ud.Maps == nil || len(*ud.Maps) != 1 {
-		t.Fatalf("Expected 1 property map, got %v", ud.Maps)
+		t.Fatalf("Expected 1 property map, got %+v", ud.Maps)
 	}
 	propMap := (*ud.Maps)[0]
 
