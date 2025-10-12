@@ -52,6 +52,10 @@ func ParseChunkPalette(data []byte) (Chunk, error) {
 			return nil, err
 		}
 
+		entry.Red = entryData.Red
+		entry.Green = entryData.Green
+		entry.Blue = entryData.Blue
+
 		if entryData.HasName == 1 {
 			var nameLen uint16
 			if err := common.BytesToStruct2(reader, &nameLen); err != nil {
