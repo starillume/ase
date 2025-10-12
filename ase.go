@@ -133,6 +133,7 @@ func createCel(cel *cel, frameIndex int, canvasWidth int, canvasHeight int, colo
 		LayerIndex: layerIndex,
 		FrameIndex: frameIndex,
 		Image:      img,
+		UserData:   cel.UserData,
 	}, nil
 }
 
@@ -223,6 +224,7 @@ func createLayers(rawLayers []*layer, frames []*Frame) ([]*Layer, []*LayerGroup)
 
 			// FIX: preguiça
 			BlendMode: "Normal",
+			UserData:  rawLayer.UserData,
 		}
 		layers = append(layers, layer)
 
