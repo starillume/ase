@@ -55,7 +55,6 @@ func TestLoaderReadToBuffer(t *testing.T) {
 		Buffer: new(bytes.Buffer),
 	}
 
-	// First read
 	if err := loader.readToBuffer(); err != nil {
 		t.Fatalf("readToBuffer failed: %v", err)
 	}
@@ -63,7 +62,6 @@ func TestLoaderReadToBuffer(t *testing.T) {
 		t.Errorf("Expected buffer length 2, got %d", loader.Buffer.Len())
 	}
 
-	// Second read
 	if err := loader.readToBuffer(); err != nil {
 		t.Fatalf("readToBuffer failed: %v", err)
 	}
@@ -71,7 +69,6 @@ func TestLoaderReadToBuffer(t *testing.T) {
 		t.Errorf("Expected buffer length 4, got %d", loader.Buffer.Len())
 	}
 
-	// Third read
 	if err := loader.readToBuffer(); err != nil {
 		t.Fatalf("readToBuffer failed: %v", err)
 	}

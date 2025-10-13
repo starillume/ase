@@ -11,8 +11,6 @@ import (
 	"github.com/starillume/ase/common"
 )
 
-// ----------------- Helpers -----------------
-
 func createFrameHeaderWithChunks(chunkCount int, frameSize int) FrameHeader {
 	return FrameHeader{
 		FrameBytes:     uint32(frameSize),
@@ -81,8 +79,6 @@ func createTestFrameBytesForFirstFrame(t *testing.T) []byte {
 	return append(fhbuf, fdatabuf...)
 }
 
-// ----------------- Tests -----------------
-
 func TestParseFrame(t *testing.T) {
 	data := createTestFrameBytesForParseFrame(t)
 	reader := bytes.NewReader(data)
@@ -116,7 +112,6 @@ func TestParseFirstFrame(t *testing.T) {
 		t.Fatalf("parseFirstFrame failed: %v", err)
 	}
 
-	// Frame
 	if len(frame.Cels) != 2 {
 		t.Errorf("Expected 2 Cel, got %d", len(frame.Cels))
 	}
@@ -125,39 +120,32 @@ func TestParseFirstFrame(t *testing.T) {
 		t.Errorf("Expected UserData attached")
 	}
 
-	// Layers
 	if len(layers) != 4 {
 		t.Errorf("Expected 4 Layer, got %d", len(layers))
 	}
 
-	// Tags
 	if len(tags) != 2 {
 		t.Errorf("Expected 2 Tag, got %d", len(tags))
 	}
 
-	// Slices
 	if len(slices) != 1 {
 		t.Errorf("Expected 1 Slice, got %d", len(slices))
 	}
 
-	// Palette
 	if palette == nil {
 		t.Errorf("Expected Palette")
 	}
 
-	// ExternalFiles
 	if externalFiles == nil {
 		t.Errorf("Expected ExternalFiles struct (even empty)")
 	}
 
-	// ColorProfile
 	if colorProfile == nil {
 		t.Errorf("Expected ColorProfile struct (even empty)")
 	}
 }
 
 func TestResolveUserDataTags(t *testing.T) {
-	// Criar tags sem userdata
 	tags := []*tag{{UserData: nil}, {UserData: nil}}
 	ud := &chunk.UserData{}
 

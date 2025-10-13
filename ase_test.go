@@ -11,8 +11,6 @@ import (
 	"github.com/starillume/ase/pixel"
 )
 
-// --- Helpers ---
-
 func fakeRawFrame() *frame {
 	p := []byte{255, 0, 0, 255}
 
@@ -95,8 +93,6 @@ func fakeRawTag() *tag {
 		},
 	}
 }
-
-// --- Tests ---
 
 func TestCreateFrames(t *testing.T) {
 	rawFrames := []*frame{fakeRawFrame()}
