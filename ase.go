@@ -2,7 +2,6 @@ package ase
 
 import (
 	"errors"
-	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -325,8 +324,6 @@ func (a *Aseprite) SpriteSheetsByTags() (map[string][]*Frame, error) {
 			return nil, errors.New("cannot create spritesheet with conflicting tag names")
 		}
 
-		fmt.Printf("aa %d\n", len(tag.Frames))
-
 		spriteSheets[tag.Name] = tag.Frames
 	}
 
@@ -334,8 +331,6 @@ func (a *Aseprite) SpriteSheetsByTags() (map[string][]*Frame, error) {
 }
 
 func SpriteSheetByFrame(frames []*Frame) (image.Image) {
-	fmt.Printf("a: len %d", len(frames))
-
 	fimages := make([]image.Image, len(frames))
 
 	for i, f := range frames {
