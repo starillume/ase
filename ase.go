@@ -1,6 +1,8 @@
 package ase
 
 import (
+	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -313,6 +315,34 @@ func DeserializeFile(fd *os.File) (*Aseprite, error) {
 
 func (a *Aseprite) SpriteSheet() (image.Image, error) {
 	return joinImagesHorizontally(a.FrameImages), nil
+}
+
+func (a *Aseprite) SpriteSheetsByTags() (map[string][]*Frame, error) {
+	spriteSheets := make(map[string][]*Frame, len(a.Tags))
+
+	for _, tag := range a.Tags {
+		if _, exists := spriteSheets[tag.Name]; exists {
+			return nil, errors.New("cannot create spritesheet with conflicting tag names")
+		}
+
+		fmt.Printf("aa %d\n", len(tag.Frames))
+
+		spriteSheets[tag.Name] = tag.Frames
+	}
+
+	return spriteSheets, nil
+}
+
+func SpriteSheetByFrame(frames []*Frame) (image.Image) {
+	fmt.Printf("a: len %d", len(frames))
+
+	fimages := make([]image.Image, len(frames))
+
+	for i, f := range frames {
+		fimages[i] = f.Image
+	}
+
+	return joinImagesHorizontally(fimages)
 }
 
 func joinImagesHorizontally(images []image.Image) image.Image {

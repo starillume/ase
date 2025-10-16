@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"image/color"
+	"image/png"
 	"os"
 	"testing"
 
@@ -267,5 +268,37 @@ func verifyAllDataRead(t *testing.T, l *Loader, filepath string) {
 
 	if fileSize-int64(l.TotalRead) > 16 {
 		t.Errorf("expected file to be fully read, but %d bytes remain (read %d of %d)", fileSize-int64(l.TotalRead), l.TotalRead, fileSize)
+	}
+}
+
+func TestSpriteSheetsByTags(t *testing.T) {
+	fd, err := os.Open(testFilePath)
+	if err != nil {
+		t.Fatalf("failed to open file %s: %v", testFilePath, err)
+	}
+	defer fd.Close()
+
+	a, err := DeserializeFile(fd)
+	if err != nil {
+		t.Fatalf("failed to deserialize file %s: %v", testFilePath, err)
+	}
+
+	sst, err := a.SpriteSheetsByTags()
+	if err != nil {
+		t.Fatalf("failed to take spriteSheets by tags: %s", err.Error())
+	}
+
+	for tag, ss := range sst {
+		fd, err := os.Create(tag)
+		if err != nil {
+		t.Fatalf("failed to open file: %s", err.Error())
+		}
+
+		defer fd.Close()
+
+		err = png.Encode(fd, SpriteSheetByFrame(ss))
+		if err != nil {
+			t.Fatalf("failed to create sprite sheet image: %s", err.Error())
+		}
 	}
 }
