@@ -1,6 +1,7 @@
 package ase
 
 import (
+	"errors"
 	"image"
 	"image/color"
 	"image/draw"
@@ -168,7 +169,7 @@ func createTags(rawTags []*tag, frames []*Frame) []*Tag {
 			Name:              rawTag.Entry.Name,
 			From:              from,
 			To:                to,
-			Frames:            frames[from:to],
+			Frames:            frames[from:to+1],
 			LoopAnimationType: rawTag.Entry.LoopAnimationType,
 			Repeat:            int(rawTag.Entry.Repeat),
 			Color:             color.RGBA{rawTag.Entry.Color[0], rawTag.Entry.Color[1], rawTag.Entry.Color[2], 255},
@@ -313,6 +314,30 @@ func DeserializeFile(fd *os.File) (*Aseprite, error) {
 
 func (a *Aseprite) SpriteSheet() (image.Image, error) {
 	return joinImagesHorizontally(a.FrameImages), nil
+}
+
+func (a *Aseprite) AnimationsByTag() (map[string][]*Frame, error) {
+	animations := make(map[string][]*Frame, len(a.Tags))
+
+	for _, tag := range a.Tags {
+		if _, exists := animations[tag.Name]; exists {
+			return nil, errors.New("cannot create animations with conflicting tag names")
+		}
+
+		animations[tag.Name] = tag.Frames
+	}
+
+	return animations, nil
+}
+
+func SpriteSheetByFrames(frames []*Frame) (image.Image) {
+	fimages := make([]image.Image, len(frames))
+
+	for i, f := range frames {
+		fimages[i] = f.Image
+	}
+
+	return joinImagesHorizontally(fimages)
 }
 
 func joinImagesHorizontally(images []image.Image) image.Image {
