@@ -168,7 +168,7 @@ func createTags(rawTags []*tag, frames []*Frame) []*Tag {
 			Name:              rawTag.Entry.Name,
 			From:              from,
 			To:                to,
-			Frames:            frames[from:to],
+			Frames:            frames[from:to+1],
 			LoopAnimationType: rawTag.Entry.LoopAnimationType,
 			Repeat:            int(rawTag.Entry.Repeat),
 			Color:             color.RGBA{rawTag.Entry.Color[0], rawTag.Entry.Color[1], rawTag.Entry.Color[2], 255},
