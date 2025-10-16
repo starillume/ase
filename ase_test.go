@@ -271,7 +271,7 @@ func verifyAllDataRead(t *testing.T, l *Loader, filepath string) {
 	}
 }
 
-func TestSpriteSheetsByTags(t *testing.T) {
+func TestAnimationsByTag(t *testing.T) {
 	fd, err := os.Open(testFilePath)
 	if err != nil {
 		t.Fatalf("failed to open file %s: %v", testFilePath, err)
@@ -283,7 +283,7 @@ func TestSpriteSheetsByTags(t *testing.T) {
 		t.Fatalf("failed to deserialize file %s: %v", testFilePath, err)
 	}
 
-	sst, err := a.SpriteSheetsByTags()
+	sst, err := a.AnimationsByTag()
 	if err != nil {
 		t.Fatalf("failed to take spriteSheets by tags: %s", err.Error())
 	}
@@ -296,7 +296,7 @@ func TestSpriteSheetsByTags(t *testing.T) {
 
 		defer fd.Close()
 
-		err = png.Encode(fd, SpriteSheetByFrame(ss))
+		err = png.Encode(fd, SpriteSheetByFrames(ss))
 		if err != nil {
 			t.Fatalf("failed to create sprite sheet image: %s", err.Error())
 		}

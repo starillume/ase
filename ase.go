@@ -316,21 +316,21 @@ func (a *Aseprite) SpriteSheet() (image.Image, error) {
 	return joinImagesHorizontally(a.FrameImages), nil
 }
 
-func (a *Aseprite) SpriteSheetsByTags() (map[string][]*Frame, error) {
-	spriteSheets := make(map[string][]*Frame, len(a.Tags))
+func (a *Aseprite) AnimationsByTag() (map[string][]*Frame, error) {
+	animations := make(map[string][]*Frame, len(a.Tags))
 
 	for _, tag := range a.Tags {
-		if _, exists := spriteSheets[tag.Name]; exists {
+		if _, exists := animations[tag.Name]; exists {
 			return nil, errors.New("cannot create spritesheet with conflicting tag names")
 		}
 
-		spriteSheets[tag.Name] = tag.Frames
+		animations[tag.Name] = tag.Frames
 	}
 
-	return spriteSheets, nil
+	return animations, nil
 }
 
-func SpriteSheetByFrame(frames []*Frame) (image.Image) {
+func SpriteSheetByFrames(frames []*Frame) (image.Image) {
 	fimages := make([]image.Image, len(frames))
 
 	for i, f := range frames {
