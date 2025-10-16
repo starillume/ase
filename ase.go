@@ -321,7 +321,7 @@ func (a *Aseprite) AnimationsByTag() (map[string][]*Frame, error) {
 
 	for _, tag := range a.Tags {
 		if _, exists := animations[tag.Name]; exists {
-			return nil, errors.New("cannot create spritesheet with conflicting tag names")
+			return nil, errors.New("cannot create animations with conflicting tag names")
 		}
 
 		animations[tag.Name] = tag.Frames
